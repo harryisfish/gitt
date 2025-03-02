@@ -3,6 +3,7 @@
 import { select, confirm } from '@inquirer/prompts';
 import { simpleGit } from 'simple-git';
 import { GitError, UserCancelError, handleError, printSuccess, printError } from './errors';
+import { display } from './display';
 
 const git = simpleGit();
 
@@ -55,6 +56,56 @@ async function checkGitRepo() {
     }
 }
 
+// 异步获取并展示仓库状态信息
+async function showRepoStatus() {
+    try {
+        const statusLines: string[] = [];
+
+        // 获取当前分支信息
+        const currentBranch = await git.branch();
+        const currentBranchName = currentBranch.current;
+        statusLines.push(`当前分支: ${currentBranchName}\n`);
+
+        // 获取最新的远程分支信息
+        await git.fetch(['--all']);
+
+        // 获取本地与远程的差异统计
+        const status = await git.status();
+        statusLines.push('📊 本地仓库状态:');
+        statusLines.push(`- 未提交的修改: ${status.modified.length + status.not_added.length + status.deleted.length} 个文件`);
+        if (status.ahead > 0) {
+            statusLines.push(`- 领先远程分支: ${status.ahead} 个提交`);
+        }
+        if (status.behind > 0) {
+            statusLines.push(`- 落后远程分支: ${status.behind} 个提交`);
+        }
+        statusLines.push('');
+
+        // 获取最近的提交信息
+        const recentCommits = await git.log(['--max-count=5']);
+        statusLines.push('📝 最近提交记录:');
+        recentCommits.all.forEach(commit => {
+            statusLines.push(`- ${commit.date.split('T')[0]} ${commit.hash.substring(0, 7)} ${commit.message}`);
+        });
+        statusLines.push('');
+
+        // 获取所有分支信息
+        const branchSummary = await git.branch(['-vv']);
+        const localBranches = branchSummary.all.length;
+        const remoteBranches = Object.keys(branchSummary.branches).filter(b => branchSummary.branches[b].label?.includes('/')).length;
+        
+        statusLines.push('🌳 分支信息:');
+        statusLines.push(`- 本地分支数: ${localBranches}`);
+        statusLines.push(`- 远程分支数: ${remoteBranches}`);
+
+        // 更新显示
+        display.updateStatus(statusLines);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : '未知错误';
+        display.showError(`获取仓库状态信息时发生错误: ${errorMessage}`);
+    }
+}
+
 async function cleanDeletedBranches() {
     try {
         console.log('正在切换到 main 分支...');
@@ -97,6 +148,9 @@ async function cleanDeletedBranches() {
 
 async function showMenu() {
     try {
+        // 准备菜单区域
+        display.prepareForMenu();
+
         const action = await select({
             message: '请选择要执行的操作：',
             choices: [
@@ -122,9 +176,17 @@ async function showMenu() {
 
 async function main() {
     try {
-        // 在程序启动时检查 Git 仓库状态
+        // 初始化显示
+        display.initDisplay();
+
+        // 在程序启动时只进行基本的 Git 仓库检查
         await checkGitRepo();
-        printSuccess('Git 仓库检查通过\n');
+        
+        // 在后台异步获取仓库状态
+        showRepoStatus().catch(error => {
+            const errorMessage = error instanceof Error ? error.message : '未知错误';
+            display.showError(`获取仓库状态时发生错误: ${errorMessage}`);
+        });
 
         while (true) {
             const action = await showMenu();
