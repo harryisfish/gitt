@@ -28,6 +28,81 @@ gitt
 
 Gitt 会自动使用你的 Git 全局配置。无需额外配置。
 
+## 版本更新与发布
+
+如果你是项目维护者，可以使用以下命令进行版本更新和发布：
+
+### 更新版本号
+
+```bash
+# 补丁号：修复 bug，小变动，如 v1.0.0 -> v1.0.1
+npm version patch
+
+# 次版本号：增加新功能，如 v1.0.0 -> v1.1.0
+npm version minor
+
+# 主版本号：不兼容的修改，如 v1.0.0 -> v2.0.0
+npm version major
+```
+
+### 发布包
+
+```bash
+npm publish
+```
+
+## 开发指南
+
+如果你想参与开发，可以按照以下步骤进行：
+
+### 1. 克隆项目
+
+```bash
+git clone <项目地址>
+cd gitt
+pnpm install
+```
+
+### 2. 开发模式运行
+
+```bash
+# 1. 构建并创建全局链接
+pnpm dev:link
+
+# 2. 创建一个测试用的 Git 仓库
+mkdir test-repo
+cd test-repo
+git init
+git remote add origin <你的测试仓库地址>
+
+# 3. 现在你可以在这个测试仓库中运行
+gitt
+
+# 4. 测试完成后，取消全局链接
+pnpm dev:unlink
+```
+
+### 3. 提交代码
+
+提交代码时，请遵循以下 commit 规范：
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+type 类型：
+- feat: 新功能
+- fix: 修复 bug
+- docs: 文档更新
+- style: 代码格式调整
+- refactor: 重构代码
+- test: 添加测试
+- chore: 构建过程或辅助工具的变动
+
 ## 常见问题
 
 ### Q: 遇到 "权限不足" 错误怎么办？
