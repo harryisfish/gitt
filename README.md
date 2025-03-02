@@ -1,63 +1,45 @@
 # Gitt
 
-这是一个命令行工具，用于帮助你管理 Git 仓库与远端仓库，如保持同步、推送、拉取等。
-
-## 技术
-1. 使用 Node.js 开发
-2. 使用 TypeScript 开发
-3. 使用 pnpm 包管理器
-
-## 功能
-1. 清理远程已删除的分支 - 自动清理那些在远程仓库已经被删除的本地分支
+一个简单但功能强大的 Git 命令行工具，帮助你更轻松地管理 Git 仓库。
 
 ## 安装
 
-使用 pnpm 安装（推荐）：
+使用 npm：
+
 ```bash
-pnpm add -g gitt
+npm install -g @harryisfish/gitt
 ```
 
-或者使用 npm 安装：
+使用 pnpm：
+
 ```bash
-npm install -g gitt
+pnpm add -g @harryisfish/gitt
 ```
 
-## 开发
+## 使用方法
 
-1. 安装依赖
-```bash
-pnpm install
-```
-
-2. 开发模式运行
-```bash
-# 1. 构建并创建全局链接
-pnpm dev:link
-
-# 2. 创建一个测试用的 Git 仓库
-mkdir test-repo
-cd test-repo
-git init
-git remote add origin <你的测试仓库地址>
-
-# 3. 现在你可以在这个测试仓库中运行
-gitt
-
-# 4. 测试完成后，取消全局链接
-pnpm dev:unlink
-```
-
-3. 构建
-```bash
-pnpm build
-```
-
-## 使用
-
-在任何 Git 仓库目录下，运行：
+安装完成后，你可以在终端中使用 `gitt` 命令：
 
 ```bash
 gitt
 ```
 
-然后使用方向键选择要执行的操作，按回车确认。
+## 配置
+
+Gitt 会自动使用你的 Git 全局配置。无需额外配置。
+
+## 常见问题
+
+### Q: 遇到 "权限不足" 错误怎么办？
+A: 请确保你有相应仓库的访问权限，并且已经正确配置了 SSH 密钥或者 Git 凭证。
+
+### Q: 如何处理合并冲突？
+A: 当发生合并冲突时，Gitt 会提示你手动解决冲突。解决后，使用 `gitt` 继续完成合并操作。
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 许可证
+
+[MIT](./LICENSE)

@@ -1,5 +1,5 @@
 {
-  "name": "gitt",
+  "name": "@harryisfish/gitt",
   "version": "1.0.0",
   "description": "这是一个命令行工具，用于帮助你管理 Git 仓库与远端仓库，如保持同步、推送、拉取等。",
   "main": "dist/index.js",
@@ -14,9 +14,17 @@
     "dev:link": "pnpm build && pnpm link --global",
     "dev:unlink": "pnpm unlink --global"
   },
-  "keywords": ["git", "cli"],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["git", "cli", "git-tools", "git-automation"],
+  "author": "harryisfish",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harryisfish/gitt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harryisfish/gitt/issues"
+  },
+  "homepage": "https://github.com/harryisfish/gitt#readme",
   "devDependencies": {
     "@types/node": "^20.11.24",
     "ts-node": "^10.9.2",
@@ -30,5 +38,10 @@
   "engines": {
     "node": ">=14.0.0"
   },
-  "packageManager": "pnpm@9.14.2"
+  "packageManager": "pnpm@9.14.2",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }
