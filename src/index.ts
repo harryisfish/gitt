@@ -59,6 +59,28 @@ async function checkGitRepo() {
 // 异步获取并展示仓库状态信息
 async function showRepoStatus() {
     try {
+        // 获取当前分支信息
+        const currentBranch = await git.branch();
+        const currentBranchName = currentBranch.current;
+
+        // 获取最新的远程分支信息
+        await git.fetch(['--all']);
+
+        // 获取本地与远程的差异统计
+        const status = await git.status();
+        const uncommittedChanges = status.modified.length + status.not_added.length + status.deleted.length;
+
+        // 更新简洁状态栏
+        display.updateCompactStatus(currentBranchName, uncommittedChanges, status.ahead, status.behind);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : '未知错误';
+        display.showError(`获取仓库状态信息时发生错误: ${errorMessage}`);
+    }
+}
+
+// 显示详细的仓库状态信息
+async function showDetailedRepoStatus() {
+    try {
         const statusLines: string[] = [];
 
         // 获取当前分支信息
@@ -98,8 +120,8 @@ async function showRepoStatus() {
         statusLines.push(`- 本地分支数: ${localBranches}`);
         statusLines.push(`- 远程分支数: ${remoteBranches}`);
 
-        // 更新显示
-        display.updateStatus(statusLines);
+        // 显示详细状态
+        display.showDetailedStatus(statusLines);
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '未知错误';
         display.showError(`获取仓库状态信息时发生错误: ${errorMessage}`);
@@ -155,6 +177,11 @@ async function showMenu() {
             message: '请选择要执行的操作：',
             choices: [
                 {
+                    name: '查看详细状态',
+                    value: 'status',
+                    description: '查看仓库的详细状态信息，包括提交记录和分支统计'
+                },
+                {
                     name: '清理远程已删除的分支',
                     value: 'clean',
                     description: '清理那些在远程仓库已经被删除的本地分支'
@@ -196,7 +223,9 @@ async function main() {
                 process.exit(0);
             }
 
-            if (action === 'clean') {
+            if (action === 'status') {
+                await showDetailedRepoStatus();
+            } else if (action === 'clean') {
                 await cleanDeletedBranches();
             }
 
@@ -208,4 +237,4 @@ async function main() {
 }
 
 // 启动程序
-main().catch(handleError); 
+main().catch(handleError);
