@@ -60,16 +60,10 @@ pnpm install
 # 1. 构建并创建全局链接
 pnpm dev:link
 
-# 2. 创建一个测试用的 Git 仓库
-mkdir test-repo
-cd test-repo
-git init
-git remote add origin <你的测试仓库地址>
-
-# 3. 现在你可以在这个测试仓库中运行
+# 2. 现在你可以在这个测试仓库中运行
 gitt
 
-# 4. 测试完成后，取消全局链接
+# 3. 测试完成后，取消全局链接
 pnpm dev:unlink
 ```
 
@@ -95,27 +89,6 @@ npm version major
 ```bash
 npm publish
 ```
-
-### 提交规范
-
-提交代码时，请遵循以下 commit 规范：
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-type 类型：
-- feat: 新功能
-- fix: 修复 bug
-- docs: 文档更新
-- style: 代码格式调整
-- refactor: 重构代码
-- test: 添加测试
-- chore: 构建过程或辅助工具的变动
 
 ## 许可证
 
