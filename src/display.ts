@@ -11,6 +11,28 @@ const SHOW_CURSOR = '\x1b[?25h';
 const ALTERNATE_SCREEN_BUFFER = '\x1b[?1049h';
 const NORMAL_SCREEN_BUFFER = '\x1b[?1049l';
 
+// 颜色和样式常量
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+const DIM = '\x1b[2m';
+const CYAN = '\x1b[36m';
+const GREEN = '\x1b[32m';
+const YELLOW = '\x1b[33m';
+const BLUE = '\x1b[34m';
+const MAGENTA = '\x1b[35m';
+const RED = '\x1b[31m';
+const BG_BLACK = '\x1b[40m';
+
+// 状态栏样式
+const STATUS_STYLES = {
+    branch: `${BOLD}${GREEN}`,
+    changes: `${YELLOW}`,
+    ahead: `${CYAN}`,
+    behind: `${MAGENTA}`,
+    separator: `${DIM}│${RESET}`,
+    label: `${DIM}`,
+};
+
 class DisplayManager {
     private statusSection: string[] = [];
     private menuSection: string[] = [];
