@@ -1,6 +1,6 @@
 {
   "name": "@harryisfish/gitt",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "这是一个命令行工具，用于帮助你管理 Git 仓库与远端仓库，如保持同步、推送、拉取等。",
   "main": "dist/index.js",
   "bin": {
