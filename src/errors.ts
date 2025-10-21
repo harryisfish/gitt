@@ -7,7 +7,7 @@ export class GitError extends Error {
 }
 
 export class UserCancelError extends Error {
-    constructor(message: string = '操作已取消') {
+    constructor(message: string = 'Operation cancelled') {
         super(message);
         this.name = 'UserCancelError';
     }
@@ -26,16 +26,16 @@ export function handleError(error: unknown): never {
     }
 
     if (error instanceof GitError) {
-        console.error(`${ERROR_COLOR}错误：${RESET_COLOR}${error.message}`);
+        console.error(`${ERROR_COLOR}Error: ${RESET_COLOR}${error.message}`);
         process.exit(1);
     }
 
     if (error instanceof Error) {
-        console.error(`${ERROR_COLOR}程序错误：${RESET_COLOR}${error.message}`);
+        console.error(`${ERROR_COLOR}Program error: ${RESET_COLOR}${error.message}`);
         process.exit(1);
     }
 
-    console.error(`${ERROR_COLOR}发生未知错误${RESET_COLOR}`);
+    console.error(`${ERROR_COLOR}Unknown error occurred${RESET_COLOR}`);
     process.exit(1);
 }
 

@@ -10,13 +10,13 @@ const git = simpleGit();
  */
 export async function cleanDeletedBranches() {
     try {
-        console.log('正在切换到 main 分支...');
+        console.log('Switching to main branch...');
         await git.checkout('main');
         
-        console.log('正在拉取最新代码...');
+        console.log('Pulling latest code...');
         await git.pull();
         
-        console.log('正在清理远程已删除的分支...');
+        console.log('Cleaning up remotely deleted branches...');
         // 获取最新的远程分支信息
         await git.fetch(['--prune']);
         
@@ -30,20 +30,20 @@ export async function cleanDeletedBranches() {
         });
         
         if (deletedBranches.length === 0) {
-            console.log('没有需要清理的分支。');
+            console.log('No branches need to be cleaned up.');
             return;
         }
         
-        console.log('以下分支将被删除：', deletedBranches.join(', '));
+        console.log('The following branches will be deleted:', deletedBranches.join(', '));
         
         // 删除这些分支
         for (const branch of deletedBranches) {
             await git.branch(['-D', branch]);
-            console.log(`已删除分支: ${branch}`);
+            console.log(`Deleted branch: ${branch}`);
         }
         
-        printSuccess('分支清理完成');
+        printSuccess('Branch cleanup completed');
     } catch (error) {
-        throw new GitError(error instanceof Error ? error.message : '清理分支时发生未知错误');
+        throw new GitError(error instanceof Error ? error.message : 'Unknown error occurred while cleaning branches');
     }
 } 

@@ -1,53 +1,53 @@
 # Gitt
 
-用来删除那些在远端已经删除但是本地还残留的分支。
+A command-line tool to delete local branches that have been deleted on the remote repository.
 
-## 安装
+## Installation
 
-使用 npm：
+Using npm:
 
 ```bash
 npm install -g @harryisfish/gitt
 ```
 
-使用 pnpm：
+Using pnpm:
 
 ```bash
 pnpm add -g @harryisfish/gitt
 ```
 
-## 使用方法
+## Usage
 
 ```bash
 gitt
 ```
 
-## 配置
+## Configuration
 
-Gitt 会自动使用你的 Git 全局配置。无需额外配置。
+Gitt automatically uses your Git global configuration. No additional setup required.
 
-## 文档
+## Documentation
 
-- [开发文档](./docs/DEVELOPMENT.md)
-- [贡献指南](./docs/CONTRIBUTING.md)
-- [架构文档](./docs/ARCHITECTURE.md)
+- [Development Guide](./docs/DEVELOPMENT.md)
+- [Contributing Guide](./docs/CONTRIBUTING.md)
+- [Architecture Documentation](./docs/ARCHITECTURE.md)
 
-## 常见问题
+## FAQ
 
-### Q: 遇到 "权限不足" 错误怎么办？
-A: 请确保你有相应仓库的访问权限，并且已经正确配置了 SSH 密钥或者 Git 凭证。
+### Q: What should I do when encountering "insufficient permissions" error?
+A: Please ensure you have access permissions to the repository and have properly configured SSH keys or Git credentials.
 
-### Q: 如何处理合并冲突？
-A: 当发生合并冲突时，Gitt 会提示你手动解决冲突。解决后，使用 `gitt commit` 继续完成合并操作。
+### Q: How to handle merge conflicts?
+A: When merge conflicts occur, Gitt will prompt you to resolve them manually. After resolution, use `gitt commit` to continue and complete the merge operation.
 
-## 开发相关
+## Development
 
-详细的开发指南请参考 [开发文档](./docs/DEVELOPMENT.md)。
+For detailed development guidelines, please refer to the [Development Guide](./docs/DEVELOPMENT.md).
 
-## 许可证
+## License
 
 [MIT](./LICENSE)
 
 ---
 
-如果你觉得这个项目有帮助，欢迎 star ⭐️
+If you find this project helpful, please give it a star ⭐️

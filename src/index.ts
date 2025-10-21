@@ -8,20 +8,20 @@ const git = simpleGit();
 
 // 处理 Ctrl+C 和其他终止信号
 process.on('SIGINT', () => {
-    throw new UserCancelError('\n操作已取消');
+    throw new UserCancelError('\nOperation cancelled');
 });
 
 process.on('SIGTERM', () => {
-    throw new UserCancelError('\n程序被终止');
+    throw new UserCancelError('\nProgram terminated');
 });
 
 // 初始化 Git 仓库
 async function initGitRepo() {
     try {
         await git.init();
-        printSuccess('Git 仓库初始化成功');
+        printSuccess('Git repository initialized successfully');
     } catch (error) {
-        throw new GitError('Git 仓库初始化失败');
+        throw new GitError('Failed to initialize Git repository');
     }
 }
 
@@ -29,20 +29,20 @@ async function initGitRepo() {
 async function checkGitRepo() {
     const isRepo = await git.checkIsRepo();
     if (!isRepo) {
-        throw new GitError('当前目录不是 Git 仓库');
+        throw new GitError('Current directory is not a Git repository');
     }
 
     // 检查是否有远程仓库配置
     const remotes = await git.getRemotes();
     if (remotes.length === 0) {
-        throw new GitError('当前 Git 仓库未配置远程仓库');
+        throw new GitError('Current Git repository has no remote configured');
     }
 
     // 检查是否能访问远程仓库
     try {
         await git.fetch(['--dry-run']);
     } catch (error) {
-        throw new GitError('无法访问远程仓库，请检查网络连接或仓库权限');
+        throw new GitError('Cannot access remote repository, please check network connection or repository permissions');
     }
 }
 
