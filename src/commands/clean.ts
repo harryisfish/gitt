@@ -1,4 +1,5 @@
 import { simpleGit } from 'simple-git';
+import { Listr } from 'listr2';
 import { GitError } from '../errors';
 import { printSuccess } from '../errors';
 
@@ -10,40 +11,57 @@ const git = simpleGit();
  */
 export async function cleanDeletedBranches() {
     try {
-        console.log('Switching to main branch...');
-        await git.checkout('main');
-        
-        console.log('Pulling latest code...');
-        await git.pull();
-        
-        console.log('Cleaning up remotely deleted branches...');
-        // 获取最新的远程分支信息
-        await git.fetch(['--prune']);
-        
-        // 获取所有分支信息
-        const branchSummary = await git.branch(['-vv']);
-        
-        // 找出已经在远程被删除的分支
-        const deletedBranches = branchSummary.all.filter(branch => {
-            const branchInfo = branchSummary.branches[branch];
-            return branchInfo.label && branchInfo.label.includes(': gone]');
-        });
-        
-        if (deletedBranches.length === 0) {
-            console.log('No branches need to be cleaned up.');
-            return;
-        }
-        
-        console.log('The following branches will be deleted:', deletedBranches.join(', '));
-        
-        // 删除这些分支
-        for (const branch of deletedBranches) {
-            await git.branch(['-D', branch]);
-            console.log(`Deleted branch: ${branch}`);
-        }
-        
+        const tasks = new Listr([
+            {
+                title: 'Switch to main branch',
+                task: async () => {
+                    await git.checkout('main');
+                }
+            },
+            {
+                title: 'Pull latest code',
+                task: async () => {
+                    await git.pull();
+                }
+            },
+            {
+                title: 'Fetch and prune remote branches',
+                task: async (ctx: { deletedBranches?: string[] }) => {
+                    await git.fetch(['--prune']);
+                    const branchSummary = await git.branch(['-vv']);
+                    const deletedBranches = branchSummary.all.filter(branch => {
+                        const branchInfo = branchSummary.branches[branch];
+                        return branchInfo.label && branchInfo.label.includes(': gone]');
+                    });
+                    ctx.deletedBranches = deletedBranches;
+                }
+            },
+            {
+                title: 'Delete branches removed on remote',
+                enabled: (ctx) => Array.isArray((ctx as any).deletedBranches),
+                skip: (ctx: { deletedBranches?: string[] }) => {
+                    if (!ctx.deletedBranches || ctx.deletedBranches.length === 0) {
+                        return 'No branches need to be cleaned up';
+                    }
+                    return false;
+                },
+                task: (ctx: { deletedBranches?: string[] }) => {
+                    return new Listr(
+                        (ctx.deletedBranches || []).map(branch => ({
+                            title: `Delete ${branch}`,
+                            task: async () => {
+                                await git.branch(['-D', branch]);
+                            }
+                        })),
+                        { concurrent: false }
+                    );
+                }
+            }
+        ]);
+
+        await tasks.run();
         printSuccess('Branch cleanup completed');
     } catch (error) {
         throw new GitError(error instanceof Error ? error.message : 'Unknown error occurred while cleaning branches');
     }
-} 
+}
