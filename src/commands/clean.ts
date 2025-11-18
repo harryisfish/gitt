@@ -13,13 +13,19 @@ export async function cleanDeletedBranches() {
     try {
         const tasks = new Listr([
             {
+                title: 'Fetch main from remote',
+                task: async () => {
+                    await git.fetch(['origin', 'main']);
+                }
+            },
+            {
                 title: 'Switch to main branch',
                 task: async () => {
                     await git.checkout('main');
                 }
             },
             {
-                title: 'Pull latest code',
+                title: 'Sync main with remote',
                 task: async () => {
                     await git.pull();
                 }

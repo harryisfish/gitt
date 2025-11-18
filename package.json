@@ -1,6 +1,6 @@
 {
   "name": "@harryisfish/gitt",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A command-line tool to help you manage Git repositories and remote repositories, such as keeping in sync, pushing, pulling, etc.",
   "main": "dist/index.js",
   "bin": {
