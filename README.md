@@ -24,7 +24,28 @@ gitt
 
 ## Configuration
 
-Gitt automatically uses your Git global configuration. No additional setup required.
+### Main Branch Detection
+
+Gitt automatically detects your main branch in the following order:
+1. **`.gitt` configuration file** (Project level)
+2. **Git config** `gitt.mainBranch` (User/System level)
+3. **Remote HEAD** (e.g., `origin/HEAD`)
+4. **Common names** (`main`, `master`)
+
+### Setting the Main Branch
+
+You can explicitly set the main branch for your project using the command:
+
+```bash
+gitt set-main <branch-name>
+```
+
+Example:
+```bash
+gitt set-main master
+```
+
+This will create a `.gitt` file in your project root with your preference.
 
 ## Documentation
 

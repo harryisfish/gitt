@@ -2,6 +2,7 @@ import { simpleGit } from 'simple-git';
 import { Listr } from 'listr2';
 import { GitError } from '../errors';
 import { printSuccess } from '../errors';
+import { getMainBranch } from '../utils/git';
 
 const git = simpleGit();
 
@@ -14,14 +15,16 @@ export async function cleanDeletedBranches() {
         const tasks = new Listr([
             {
                 title: 'Fetch main from remote',
-                task: async () => {
-                    await git.fetch(['origin', 'main']);
+                task: async (ctx: any) => {
+                    const mainBranch = await getMainBranch();
+                    ctx.mainBranch = mainBranch;
+                    await git.fetch(['origin', mainBranch]);
                 }
             },
             {
                 title: 'Switch to main branch',
-                task: async () => {
-                    await git.checkout('main');
+                task: async (ctx: any) => {
+                    await git.checkout(ctx.mainBranch);
                 }
             },
             {

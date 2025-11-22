@@ -48,12 +48,23 @@ async function checkGitRepo() {
 
 async function main() {
     try {
+        const args = process.argv.slice(2);
+        const command = args[0];
+
         // 检查 Git 仓库
         await checkGitRepo();
-        
-        // 执行清理操作
-        await cleanDeletedBranches();
-        
+
+        if (command === 'set-main') {
+            const branch = args[1];
+            if (!branch) {
+                throw new Error('Please specify a branch name');
+            }
+            await import('./commands/config').then(m => m.configMainBranch(branch));
+        } else {
+            // 默认执行清理操作
+            await cleanDeletedBranches();
+        }
+
         // 退出程序
         process.exit(0);
     } catch (error) {
