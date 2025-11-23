@@ -18,8 +18,10 @@ pnpm add -g @harryisfish/gitt
 
 ## Usage
 
+### Basic Commands
+
 ```bash
-# Default behavior (auto-clean)
+# Default behavior (auto-clean deleted branches)
 gitt
 
 # Interactive mode (select branches to delete)
@@ -31,7 +33,62 @@ gitt --interactive
 gitt -d
 # or
 gitt --dry-run
+
+# Check version
+gitt -v
+# or
+gitt --version
+
+# Show help
+gitt -h
+# or
+gitt --help
 ```
+
+### Stale Branch Cleaning (NEW)
+
+Clean up branches that haven't been updated for a long time:
+
+```bash
+# Find branches inactive for 90+ days (default)
+gitt --stale
+
+# Custom threshold (e.g., 30 days)
+gitt --stale 30
+
+# Preview stale branches without deleting
+gitt --stale --dry-run
+
+# Interactively select stale branches to delete
+gitt --stale -i
+```
+
+**Note:** Stale branch detection:
+- Checks the last commit date on each branch
+- Automatically excludes the main branch
+- Protects branches in use by Git worktrees
+- Can be combined with interactive (`-i`) and dry-run (`-d`) modes
+
+
+## Features
+
+### 🔄 Auto Update Notification
+Gitt automatically checks for updates on each run and notifies you when a new version is available.
+
+### 🌳 Worktree Protection
+Branches currently checked out in Git worktrees are automatically protected from deletion to prevent errors.
+
+### 🧹 Smart Branch Cleanup
+- **Remote-deleted branches**: Automatically detect and clean branches removed from remote
+- **Stale branches**: Find and remove branches inactive for X days
+- **Merge status check**: Safely handles both merged and unmerged branches
+- **Interactive mode**: Manual selection with clear indicators
+- **Dry-run mode**: Preview changes before applying
+
+### 🛡️ Branch Protection
+- Honors `.gitt` ignore patterns
+- Respects Git worktree usage
+- Never touches the main branch
 
 ## Configuration
 

@@ -58,12 +58,16 @@ Commands:
 Options:
   -i, --interactive      Interactive mode: Select branches to delete
   -d, --dry-run          Dry run: Show what would be deleted without deleting
+  --stale [days]         Find stale branches (default: 90 days, use with a number for custom)
+  -v, --version          Show version number
   -h, --help             Show this help message
 
 Examples:
   gitt                   # Auto-clean deleted branches
   gitt -i                # Select branches to delete interactively
   gitt -d                # Preview deletion
+  gitt --stale           # Find branches inactive for 90+ days
+  gitt --stale 30        # Find branches inactive for 30+ days
   gitt ignore "temp/*"   # Ignore branches matching "temp/*"
   gitt set-main master   # Set main branch to 'master'
 `);
@@ -74,10 +78,27 @@ async function main() {
         const args = process.argv.slice(2);
         const command = args[0];
 
+        // Check for version command
+        if (args.includes('-v') || args.includes('--version')) {
+            const packageJson = require('../package.json');
+            console.log(`v${packageJson.version}`);
+            process.exit(0);
+        }
+
         // Check for help command
         if (args.includes('-h') || args.includes('--help')) {
             printHelp();
             process.exit(0);
+        }
+
+        // Check for updates
+        try {
+            // Use eval to prevent TypeScript from transpiling dynamic import to require()
+            const { default: updateNotifier } = await (eval('import("update-notifier")') as Promise<any>);
+            const pkg = require('../package.json');
+            updateNotifier({ pkg }).notify();
+        } catch (e) {
+            // Ignore update check errors
         }
 
         // 检查 Git 仓库
@@ -100,8 +121,27 @@ async function main() {
             const isInteractive = args.includes('-i') || args.includes('--interactive');
             const isDryRun = args.includes('-d') || args.includes('--dry-run');
 
+            // Parse stale options
+            const staleIndex = args.indexOf('--stale');
+            const isStale = staleIndex !== -1;
+            let staleDays = 90; // Default 3 months
+
+            if (isStale) {
+                // Check if next arg is a number (days)
+                // Note: This is a simple check, ideally use a proper arg parser like commander or yargs
+                const nextArg = args[staleIndex + 1];
+                if (nextArg && !nextArg.startsWith('-') && !isNaN(Number(nextArg))) {
+                    staleDays = Number(nextArg);
+                }
+            }
+
             // 默认执行清理操作
-            await cleanDeletedBranches({ interactive: isInteractive, dryRun: isDryRun });
+            await cleanDeletedBranches({
+                interactive: isInteractive,
+                dryRun: isDryRun,
+                stale: isStale,
+                staleDays: staleDays
+            });
         }
 
         // 退出程序

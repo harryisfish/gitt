@@ -71,3 +71,61 @@ export async function setMainBranch(branch: string): Promise<void> {
         throw new GitError('Failed to set main branch configuration');
     }
 }
+/**
+ * Check if a branch is merged into the main branch.
+ */
+export async function isBranchMerged(branch: string, mainBranch: string): Promise<boolean> {
+    try {
+        const mergedBranches = await git.branch(['--merged', mainBranch]);
+        return mergedBranches.all.includes(branch);
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * Get a list of branches that are currently checked out in worktrees.
+ */
+export async function getWorktrees(): Promise<string[]> {
+    try {
+        // Output format:
+        // /path/to/repo    (HEAD detached at 123456)
+        // /path/to/worktree    [branch-name]
+        const worktrees = await git.raw(['worktree', 'list']);
+        const lines = worktrees.split('\n').filter(Boolean);
+
+        const branches: string[] = [];
+        for (const line of lines) {
+            // Extract branch name from [branch-name]
+            const match = line.match(/\[(.*?)\]/);
+            if (match && match[1]) {
+                branches.push(match[1]);
+            }
+        }
+        return branches;
+    } catch (error) {
+        // If worktrees are not supported or error occurs, return empty list
+        return [];
+    }
+}
+
+/**
+ * Get the last commit time (in days) for a branch.
+ * Returns the number of days since the last commit.
+ */
+export async function getBranchLastCommitTime(branch: string): Promise<number> {
+    try {
+        // Get unix timestamp of last commit
+        const timestamp = await git.raw(['log', '-1', '--format=%at', branch]);
+        const lastCommitDate = new Date(parseInt(timestamp.trim()) * 1000);
+        const now = new Date();
+
+        const diffTime = Math.abs(now.getTime() - lastCommitDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return diffDays;
+    } catch (error) {
+        // If branch doesn't exist or error, return 0 (treat as active/new to be safe)
+        return 0;
+    }
+}
