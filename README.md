@@ -19,7 +19,18 @@ pnpm add -g @harryisfish/gitt
 ## Usage
 
 ```bash
+# Default behavior (auto-clean)
 gitt
+
+# Interactive mode (select branches to delete)
+gitt -i
+# or
+gitt --interactive
+
+# Dry run (preview what would be deleted)
+gitt -d
+# or
+gitt --dry-run
 ```
 
 ## Configuration
@@ -45,7 +56,34 @@ Example:
 gitt set-main master
 ```
 
+gitt set-main master
+```
+
 This will create a `.gitt` file in your project root with your preference.
+
+### Branch Protection
+
+You can prevent specific branches from being deleted by adding them to the ignore list.
+
+**Using command (Recommended):**
+```bash
+gitt ignore "release/*"
+gitt ignore "test-branch"
+```
+
+**Manual Configuration:**
+You can also manually edit the `.gitt` configuration file:
+```json
+{
+  "mainBranch": "main",
+  "ignoreBranches": [
+    "release/*",
+    "test-branch",
+    "feature/important-*"
+  ]
+}
+```
+Supports glob patterns (e.g., `*`).
 
 ## Documentation
 

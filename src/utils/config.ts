@@ -4,6 +4,8 @@ import { simpleGit } from 'simple-git';
 
 export interface GittConfig {
     mainBranch?: string;
+    ignoreBranches?: string[];
+    staleDays?: number;
 }
 
 const CONFIG_FILE_NAME = '.gitt';
