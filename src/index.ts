@@ -8,7 +8,7 @@ import { cleanDeletedBranches } from './commands/clean';
 const git = simpleGit();
 const packageJson = require('../package.json');
 
-// 处理 Ctrl+C 和其他终止信号
+// Handle Ctrl+C and other termination signals
 process.on('SIGINT', () => {
     throw new UserCancelError('\nOperation cancelled');
 });
@@ -17,20 +17,20 @@ process.on('SIGTERM', () => {
     throw new UserCancelError('\nProgram terminated');
 });
 
-// 检查当前目录是否是 Git 仓库
+// Check if current directory is a Git repository
 async function checkGitRepo() {
     const isRepo = await git.checkIsRepo();
     if (!isRepo) {
         throw new GitError('Current directory is not a Git repository');
     }
 
-    // 检查是否有远程仓库配置
+    // Check if remote repository is configured
     const remotes = await git.getRemotes();
     if (remotes.length === 0) {
         throw new GitError('Current Git repository has no remote configured');
     }
 
-    // 检查是否能访问远程仓库
+    // Check if remote repository is accessible
     try {
         await git.fetch(['--dry-run']);
     } catch (error) {
@@ -42,8 +42,8 @@ async function main() {
     try {
         // Check for updates before parsing commands
         try {
-            // Use eval to prevent TypeScript from transpiling dynamic import to require()
-            const { default: updateNotifier } = await (eval('import("update-notifier")') as Promise<any>);
+            // Use dynamic import to load update-notifier
+            const updateNotifier = await import('update-notifier').then(m => m.default);
             updateNotifier({ pkg: packageJson }).notify();
         } catch (e) {
             // Ignore update check errors
@@ -111,5 +111,5 @@ Examples:
     }
 }
 
-// 启动程序
+// Start the program
 main();

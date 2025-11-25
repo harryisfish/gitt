@@ -23,6 +23,7 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
     try {
         const state = {
             mainBranch: '',
+            currentBranch: '',
             deletedBranches: [] as { name: string; isMerged: boolean; reason?: string }[]
         };
 
@@ -33,35 +34,9 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
                 task: async (ctx: any) => {
                     const mainBranch = await getMainBranch();
                     ctx.mainBranch = mainBranch;
+                    const branchInfo = await git.branchLocal();
+                    ctx.currentBranch = branchInfo.current;
                     await git.fetch(['origin', mainBranch]);
-                }
-            },
-            {
-                title: 'Switch to main branch',
-                task: async (ctx: any) => {
-                    const currentBranch = (await git.branchLocal()).current;
-                    const willDeleteCurrent = state.deletedBranches.some(b => b.name === currentBranch);
-
-                    try {
-                        await git.checkout(ctx.mainBranch);
-                    } catch (e) {
-                        // If current branch will be deleted, we must switch - fail the operation
-                        if (willDeleteCurrent) {
-                            throw new GitError(`Cannot switch to ${ctx.mainBranch}. Current branch "${currentBranch}" will be deleted but checkout failed.`);
-                        }
-                        // Otherwise, warn but continue (we can delete other branches)
-                        console.warn(`Warning: Could not switch to ${ctx.mainBranch}, but continuing as current branch is not being deleted.`);
-                    }
-                }
-            },
-            {
-                title: 'Sync main with remote',
-                task: async () => {
-                    try {
-                        await git.pull();
-                    } catch (e) {
-                        // Ignore pull errors (e.g. if not on branch)
-                    }
                 }
             },
             {
@@ -166,6 +141,20 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
             return;
         }
 
+        // Switch to main branch if current branch will be deleted
+        const willDeleteCurrent = state.deletedBranches.some(b => b.name === state.currentBranch);
+        if (willDeleteCurrent) {
+            try {
+                await git.checkout(state.mainBranch);
+                await git.pull();
+                console.log(`Switched to ${state.mainBranch} and synced with remote`);
+            } catch (e) {
+                throw new GitError(
+                    `Cannot switch to ${state.mainBranch}. Current branch "${state.currentBranch}" will be deleted but checkout failed: ${e instanceof Error ? e.message : 'Unknown error'}`
+                );
+            }
+        }
+
         // Phase 3: Execution
         const deleteTasks = new Listr([
             {
@@ -188,6 +177,14 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         await deleteTasks.run(state);
         printSuccess('Branch cleanup completed');
     } catch (error) {
-        throw new GitError(error instanceof Error ? error.message : 'Unknown error occurred while cleaning branches');
+        if (error instanceof GitError || error instanceof UserCancelError) {
+            // Re-throw our custom errors as-is
+            throw error;
+        }
+        // Wrap other errors and preserve the original error
+        throw new GitError(
+            error instanceof Error ? error.message : 'Unknown error occurred while cleaning branches',
+            error instanceof Error ? error : undefined
+        );
     }
 }

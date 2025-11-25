@@ -1,10 +1,18 @@
 import chalk from 'chalk';
 
-// 自定义错误类型
+// Custom error types
 export class GitError extends Error {
-    constructor(message: string) {
+    cause?: Error;
+
+    constructor(message: string, cause?: Error) {
         super(message);
         this.name = 'GitError';
+        this.cause = cause;
+
+        // Preserve stack trace from the cause if available
+        if (cause?.stack) {
+            this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+        }
     }
 }
 
@@ -15,7 +23,7 @@ export class UserCancelError extends Error {
     }
 }
 
-// 统一错误处理函数
+// Unified error handling function
 export function handleError(error: unknown): never {
     if (error instanceof UserCancelError) {
         console.log(error.message);
@@ -24,11 +32,19 @@ export function handleError(error: unknown): never {
 
     if (error instanceof GitError) {
         console.error(chalk.red('Error:'), error.message);
+        // In development mode, show full stack trace
+        if (process.env.DEBUG || process.env.VERBOSE) {
+            console.error(chalk.gray(error.stack));
+        }
         process.exit(1);
     }
 
     if (error instanceof Error) {
         console.error(chalk.red('Program error:'), error.message);
+        // In development mode, show full stack trace
+        if (process.env.DEBUG || process.env.VERBOSE) {
+            console.error(chalk.gray(error.stack));
+        }
         process.exit(1);
     }
 
@@ -36,12 +52,12 @@ export function handleError(error: unknown): never {
     process.exit(1);
 }
 
-// 成功消息处理
+// Success message handler
 export function printSuccess(message: string): void {
     console.log(chalk.green('✓'), message);
 }
 
-// 错误消息处理
+// Error message handler
 export function printError(message: string): void {
     console.error(chalk.red(message));
 } 
