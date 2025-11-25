@@ -93,6 +93,15 @@ async function main() {
                 await import('./commands/config').then(m => m.configIgnoreBranch(pattern));
             });
 
+        // upgrade command
+        program
+            .command('upgrade')
+            .description('Check for updates and upgrade to the latest version')
+            .action(async () => {
+                // No need to check Git repo for upgrade command
+                await import('./commands/upgrade').then(m => m.upgradeCommand());
+            });
+
         // Add examples to help
         program.addHelpText('after', `
 Examples:
@@ -103,6 +112,7 @@ Examples:
   $ gitt --stale 30        # Find branches inactive for 30+ days
   $ gitt ignore "temp/*"   # Ignore branches matching "temp/*"
   $ gitt set-main master   # Set main branch to 'master'
+  $ gitt upgrade           # Check for updates and upgrade
 `);
 
         await program.parseAsync(process.argv);
