@@ -2,8 +2,7 @@ import { simpleGit } from 'simple-git';
 import { Listr } from 'listr2';
 import { checkbox } from '@inquirer/prompts';
 import { minimatch } from 'minimatch';
-import { GitError } from '../errors';
-import { printSuccess, printError } from '../errors';
+import { GitError, UserCancelError, printSuccess } from '../errors';
 import { getMainBranch, isBranchMerged, getWorktrees, getBranchLastCommitTime } from '../utils/git';
 import { readConfigFile } from '../utils/config';
 
@@ -40,15 +39,18 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
             {
                 title: 'Switch to main branch',
                 task: async (ctx: any) => {
-                    // Check if we are on a branch that will be deleted? 
-                    // For now, just try to switch to main to be safe.
-                    // But if main is checked out in another worktree, this might fail?
-                    // Let's just try.
+                    const currentBranch = (await git.branchLocal()).current;
+                    const willDeleteCurrent = state.deletedBranches.some(b => b.name === currentBranch);
+
                     try {
                         await git.checkout(ctx.mainBranch);
                     } catch (e) {
-                        // If we can't checkout main (e.g. dirty state), warn but continue?
-                        // Ideally we should be on main to delete other branches safely.
+                        // If current branch will be deleted, we must switch - fail the operation
+                        if (willDeleteCurrent) {
+                            throw new GitError(`Cannot switch to ${ctx.mainBranch}. Current branch "${currentBranch}" will be deleted but checkout failed.`);
+                        }
+                        // Otherwise, warn but continue (we can delete other branches)
+                        console.warn(`Warning: Could not switch to ${ctx.mainBranch}, but continuing as current branch is not being deleted.`);
                     }
                 }
             },
@@ -141,7 +143,7 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
                 state.deletedBranches = selected;
             } catch (e) {
                 // User cancelled
-                throw new Error('Operation cancelled');
+                throw new UserCancelError('Operation cancelled');
             }
         } else {
             // Auto mode: Filter out unmerged branches
@@ -168,7 +170,7 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         const deleteTasks = new Listr([
             {
                 title: 'Delete branches',
-                task: (ctx: any) => {
+                task: (_ctx: any) => {
                     return new Listr(
                         state.deletedBranches.map(branch => ({
                             title: `Delete ${branch.name}`,
