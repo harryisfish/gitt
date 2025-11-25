@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import { Command } from 'commander';
 import { simpleGit } from 'simple-git';
-import { GitError, UserCancelError, handleError, printSuccess, printError } from './errors';
+import { GitError, UserCancelError, handleError } from './errors';
 import { cleanDeletedBranches } from './commands/clean';
 
 const git = simpleGit();
+const packageJson = require('../package.json');
 
 // 处理 Ctrl+C 和其他终止信号
 process.on('SIGINT', () => {
@@ -14,16 +16,6 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
     throw new UserCancelError('\nProgram terminated');
 });
-
-// 初始化 Git 仓库
-async function initGitRepo() {
-    try {
-        await git.init();
-        printSuccess('Git repository initialized successfully');
-    } catch (error) {
-        throw new GitError('Failed to initialize Git repository');
-    }
-}
 
 // 检查当前目录是否是 Git 仓库
 async function checkGitRepo() {
@@ -46,111 +38,78 @@ async function checkGitRepo() {
     }
 }
 
-function printHelp() {
-    console.log(`
-Usage: gitt [command] [options]
-
-Commands:
-  (default)              Clean up local branches that have been deleted on remote
-  set-main <branch>      Set the main branch for the current project
-  ignore <pattern>       Add a branch pattern to the ignore list (e.g., "release/*")
-
-Options:
-  -i, --interactive      Interactive mode: Select branches to delete
-  -d, --dry-run          Dry run: Show what would be deleted without deleting
-  --stale [days]         Find stale branches (default: 90 days, use with a number for custom)
-  -v, --version          Show version number
-  -h, --help             Show this help message
-
-Examples:
-  gitt                   # Auto-clean deleted branches
-  gitt -i                # Select branches to delete interactively
-  gitt -d                # Preview deletion
-  gitt --stale           # Find branches inactive for 90+ days
-  gitt --stale 30        # Find branches inactive for 30+ days
-  gitt ignore "temp/*"   # Ignore branches matching "temp/*"
-  gitt set-main master   # Set main branch to 'master'
-`);
-}
-
 async function main() {
     try {
-        const args = process.argv.slice(2);
-        const command = args[0];
-
-        // Check for version command
-        if (args.includes('-v') || args.includes('--version')) {
-            const packageJson = require('../package.json');
-            console.log(`v${packageJson.version}`);
-            process.exit(0);
-        }
-
-        // Check for help command
-        if (args.includes('-h') || args.includes('--help')) {
-            printHelp();
-            process.exit(0);
-        }
-
-        // Check for updates
+        // Check for updates before parsing commands
         try {
             // Use eval to prevent TypeScript from transpiling dynamic import to require()
             const { default: updateNotifier } = await (eval('import("update-notifier")') as Promise<any>);
-            const pkg = require('../package.json');
-            updateNotifier({ pkg }).notify();
+            updateNotifier({ pkg: packageJson }).notify();
         } catch (e) {
             // Ignore update check errors
         }
 
-        // 检查 Git 仓库
-        await checkGitRepo();
+        const program = new Command();
 
-        if (command === 'set-main') {
-            const branch = args[1];
-            if (!branch) {
-                throw new Error('Please specify a branch name');
-            }
-            await import('./commands/config').then(m => m.configMainBranch(branch));
-        } else if (command === 'ignore') {
-            const pattern = args[1];
-            if (!pattern) {
-                throw new Error('Please specify a branch pattern to ignore');
-            }
-            await import('./commands/config').then(m => m.configIgnoreBranch(pattern));
-        } else {
-            // Parse options
-            const isInteractive = args.includes('-i') || args.includes('--interactive');
-            const isDryRun = args.includes('-d') || args.includes('--dry-run');
+        program
+            .name('gitt')
+            .description('A CLI tool for Git branch management')
+            .version(packageJson.version, '-v, --version', 'Show version number');
 
-            // Parse stale options
-            const staleIndex = args.indexOf('--stale');
-            const isStale = staleIndex !== -1;
-            let staleDays = 90; // Default 3 months
+        // Default command: clean deleted branches
+        program
+            .option('-i, --interactive', 'Interactive mode: Select branches to delete')
+            .option('-d, --dry-run', 'Dry run: Show what would be deleted without deleting')
+            .option('--stale [days]', 'Find stale branches (default: 90 days)', '90')
+            .action(async (options) => {
+                await checkGitRepo();
 
-            if (isStale) {
-                // Check if next arg is a number (days)
-                // Note: This is a simple check, ideally use a proper arg parser like commander or yargs
-                const nextArg = args[staleIndex + 1];
-                if (nextArg && !nextArg.startsWith('-') && !isNaN(Number(nextArg))) {
-                    staleDays = Number(nextArg);
-                }
-            }
+                const staleDays = options.stale === true ? 90 : parseInt(options.stale, 10);
+                const isStale = options.stale !== undefined;
 
-            // 默认执行清理操作
-            await cleanDeletedBranches({
-                interactive: isInteractive,
-                dryRun: isDryRun,
-                stale: isStale,
-                staleDays: staleDays
+                await cleanDeletedBranches({
+                    interactive: options.interactive || false,
+                    dryRun: options.dryRun || false,
+                    stale: isStale,
+                    staleDays: staleDays
+                });
             });
-        }
 
-        // 退出程序
-        process.exit(0);
+        // set-main command
+        program
+            .command('set-main <branch>')
+            .description('Set the main branch for the current project')
+            .action(async (branch: string) => {
+                await checkGitRepo();
+                await import('./commands/config').then(m => m.configMainBranch(branch));
+            });
+
+        // ignore command
+        program
+            .command('ignore <pattern>')
+            .description('Add a branch pattern to the ignore list (e.g., "release/*")')
+            .action(async (pattern: string) => {
+                await checkGitRepo();
+                await import('./commands/config').then(m => m.configIgnoreBranch(pattern));
+            });
+
+        // Add examples to help
+        program.addHelpText('after', `
+Examples:
+  $ gitt                   # Auto-clean deleted branches
+  $ gitt -i                # Select branches to delete interactively
+  $ gitt -d                # Preview deletion
+  $ gitt --stale           # Find branches inactive for 90+ days
+  $ gitt --stale 30        # Find branches inactive for 30+ days
+  $ gitt ignore "temp/*"   # Ignore branches matching "temp/*"
+  $ gitt set-main master   # Set main branch to 'master'
+`);
+
+        await program.parseAsync(process.argv);
     } catch (error) {
         handleError(error);
-        process.exit(1);
     }
 }
 
 // 启动程序
-main().catch(handleError);
+main();
