@@ -1,7 +1,5 @@
 import { confirm } from '@inquirer/prompts';
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 import { printSuccess, GitError } from '../errors';
 
@@ -20,9 +18,11 @@ function detectPackageManager(): 'npm' | 'pnpm' | 'yarn' | null {
     try {
         // Check if installed globally with pnpm
         try {
-            execSync('pnpm list -g --depth=0', { encoding: 'utf8', stdio: 'pipe' });
-            const output = execSync('pnpm list -g --depth=0', { encoding: 'utf8' });
-            if (output.includes(packageJson.name)) {
+            const result = spawnSync('pnpm', ['list', '-g', '--depth=0'], {
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+            if (result.status === 0 && result.stdout.includes(packageJson.name)) {
                 return 'pnpm';
             }
         } catch (e) {
@@ -31,8 +31,11 @@ function detectPackageManager(): 'npm' | 'pnpm' | 'yarn' | null {
 
         // Check if installed globally with yarn
         try {
-            const output = execSync('yarn global list', { encoding: 'utf8', stdio: 'pipe' });
-            if (output.includes(packageJson.name)) {
+            const result = spawnSync('yarn', ['global', 'list'], {
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+            if (result.status === 0 && result.stdout.includes(packageJson.name)) {
                 return 'yarn';
             }
         } catch (e) {
@@ -41,24 +44,15 @@ function detectPackageManager(): 'npm' | 'pnpm' | 'yarn' | null {
 
         // Check if installed globally with npm
         try {
-            const output = execSync('npm list -g --depth=0', { encoding: 'utf8', stdio: 'pipe' });
-            if (output.includes(packageJson.name)) {
+            const result = spawnSync('npm', ['list', '-g', '--depth=0'], {
+                encoding: 'utf8',
+                stdio: 'pipe'
+            });
+            if (result.status === 0 && result.stdout.includes(packageJson.name)) {
                 return 'npm';
             }
         } catch (e) {
             // Not installed with npm
-        }
-
-        // Fallback: check for lock files in project directory
-        const projectRoot = process.cwd();
-        if (fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'))) {
-            return 'pnpm';
-        }
-        if (fs.existsSync(path.join(projectRoot, 'yarn.lock'))) {
-            return 'yarn';
-        }
-        if (fs.existsSync(path.join(projectRoot, 'package-lock.json'))) {
-            return 'npm';
         }
 
         return null;
@@ -156,26 +150,34 @@ function executeUpgrade(packageManager: string, packageName: string): void {
 
     try {
         let command: string;
+        let args: string[];
 
         switch (packageManager) {
             case 'pnpm':
-                command = `pnpm add -g ${packageName}@latest`;
+                command = 'pnpm';
+                args = ['add', '-g', `${packageName}@latest`];
                 break;
             case 'yarn':
-                command = `yarn global add ${packageName}@latest`;
+                command = 'yarn';
+                args = ['global', 'add', `${packageName}@latest`];
                 break;
             case 'npm':
             default:
-                command = `npm install -g ${packageName}@latest`;
+                command = 'npm';
+                args = ['install', '-g', `${packageName}@latest`];
                 break;
         }
 
-        console.log(chalk.gray(`Running: ${command}\n`));
+        console.log(chalk.gray(`Running: ${command} ${args.join(' ')}\n`));
 
-        execSync(command, {
+        const result = spawnSync(command, args, {
             stdio: 'inherit',
             encoding: 'utf8'
         });
+
+        if (result.status !== 0) {
+            throw new Error(`Command exited with status ${result.status}`);
+        }
 
         console.log('');
         printSuccess('Upgrade completed successfully!');
