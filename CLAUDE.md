@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Always reply me in Chinese.
+
 ## Project Overview
 
 Gitt is a CLI tool for Git branch management, focusing on cleaning up deleted and stale local branches. It provides both automatic and interactive modes with safety features like worktree protection and merge status checking.
