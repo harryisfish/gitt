@@ -11,9 +11,35 @@ describe('Custom Error Classes', () => {
             expect(error.name).toBe('GitError');
         });
 
+        it('should create GitError without cause', () => {
+            const error = new GitError('Test error');
+            expect(error.cause).toBeUndefined();
+        });
+
+        it('should create GitError with cause', () => {
+            const originalError = new Error('Original error');
+            const error = new GitError('Wrapped error', originalError);
+            expect(error.cause).toBe(originalError);
+        });
+
+        it('should preserve stack trace from cause', () => {
+            const originalError = new Error('Original error');
+            const error = new GitError('Wrapped error', originalError);
+            expect(error.stack).toContain('Wrapped error');
+            expect(error.stack).toContain('Caused by:');
+            expect(error.stack).toContain('Original error');
+        });
+
         it('should be throwable', () => {
             expect(() => {
                 throw new GitError('Test error');
+            }).toThrow(GitError);
+        });
+
+        it('should be throwable with cause', () => {
+            const originalError = new Error('Original');
+            expect(() => {
+                throw new GitError('Test error', originalError);
             }).toThrow(GitError);
         });
     });
