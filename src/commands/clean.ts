@@ -123,11 +123,12 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         } else {
             // Auto mode: Filter out unmerged branches
             const unmerged = state.deletedBranches.filter(b => !b.isMerged);
-            if (unmerged.length > 0) {
-                console.log('\nSkipping unmerged branches (use -i to force delete):');
-                unmerged.forEach(b => console.log(`  - ${b.name} (${b.reason})`));
-            }
             state.deletedBranches = state.deletedBranches.filter(b => b.isMerged);
+
+            if (state.deletedBranches.length === 0 && unmerged.length > 0) {
+                printSuccess(`No merged branches to clean up (${unmerged.length} unmerged branch${unmerged.length > 1 ? 'es' : ''} skipped, use -i to review)`);
+                return;
+            }
         }
 
         if (state.deletedBranches.length === 0) {
