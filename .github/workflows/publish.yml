@@ -35,5 +35,8 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Update npm to latest
+        run: npm install -g npm@latest
+
       - name: Publish to npm
-        run: npm publish --access public --provenance
+        run: npm publish --access public
