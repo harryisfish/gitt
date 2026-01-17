@@ -66,9 +66,13 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
                         }
                     } else {
                         // Default mode: check "gone" branches
+                        // Note: label may contain newlines/whitespace when branch names are long
                         const goneBranches = branchSummary.all.filter(branch => {
                             const branchInfo = branchSummary.branches[branch];
-                            return branchInfo.label && branchInfo.label.includes(': gone]');
+                            if (!branchInfo.label) return false;
+                            // Normalize whitespace and check for "gone" status
+                            const normalizedLabel = branchInfo.label.replace(/\s+/g, ' ');
+                            return normalizedLabel.includes(': gone]');
                         });
                         candidates = goneBranches.map(b => ({ name: b, reason: 'Remote deleted' }));
                     }
