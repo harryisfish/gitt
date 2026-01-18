@@ -30,13 +30,24 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         // Phase 1: Discovery
         const discoveryTasks = new Listr([
             {
-                title: 'Fetch main from remote',
+                title: 'Switch to main branch',
                 task: async (ctx: any) => {
                     const mainBranch = await getMainBranch();
                     ctx.mainBranch = mainBranch;
                     const branchInfo = await git.branchLocal();
                     ctx.currentBranch = branchInfo.current;
-                    await git.fetch(['origin', mainBranch]);
+
+                    // Always switch to main branch first
+                    if (ctx.currentBranch !== mainBranch) {
+                        await git.checkout(mainBranch);
+                        await git.pull();
+                    }
+                }
+            },
+            {
+                title: 'Fetch from remote',
+                task: async (ctx: any) => {
+                    await git.fetch(['origin', ctx.mainBranch]);
                 }
             },
             {
@@ -144,20 +155,6 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
             console.log('\nDry Run: The following branches would be deleted:');
             state.deletedBranches.forEach(b => console.log(`  - ${b.name} (${b.reason})`));
             return;
-        }
-
-        // Switch to main branch if current branch will be deleted
-        const willDeleteCurrent = state.deletedBranches.some(b => b.name === state.currentBranch);
-        if (willDeleteCurrent) {
-            try {
-                await git.checkout(state.mainBranch);
-                await git.pull();
-                console.log(`Switched to ${state.mainBranch} and synced with remote`);
-            } catch (e) {
-                throw new GitError(
-                    `Cannot switch to ${state.mainBranch}. Current branch "${state.currentBranch}" will be deleted but checkout failed: ${e instanceof Error ? e.message : 'Unknown error'}`
-                );
-            }
         }
 
         // Phase 3: Execution
