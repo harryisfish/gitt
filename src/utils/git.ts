@@ -73,11 +73,31 @@ export async function setMainBranch(branch: string): Promise<void> {
 }
 /**
  * Check if a branch is merged into the main branch.
+ * Supports regular merge, squash merge, and rebase merge detection.
  */
 export async function isBranchMerged(branch: string, mainBranch: string): Promise<boolean> {
     try {
+        // Method 1: Check regular merge with git branch --merged
         const mergedBranches = await git.branch(['--merged', mainBranch]);
-        return mergedBranches.all.includes(branch);
+        if (mergedBranches.all.includes(branch)) {
+            return true;
+        }
+
+        // Method 2: Check squash/rebase merge with git cherry
+        // git cherry returns empty or all lines start with '-' if fully merged
+        // '-' means the commit exists in upstream (merged)
+        // '+' means the commit does not exist in upstream (not merged)
+        const cherryOutput = await git.raw(['cherry', mainBranch, branch]);
+        const lines = cherryOutput.trim().split('\n').filter(Boolean);
+
+        // If no commits unique to branch, or all commits are merged (start with -)
+        if (lines.length === 0) {
+            return true;
+        }
+
+        // Check if all commits are merged (all lines start with '-')
+        const hasUnmergedCommits = lines.some(line => line.startsWith('+'));
+        return !hasUnmergedCommits;
     } catch (error) {
         return false;
     }
