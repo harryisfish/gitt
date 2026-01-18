@@ -60,12 +60,13 @@ async function main() {
         program
             .option('-i, --interactive', 'Interactive mode: Select branches to delete')
             .option('-d, --dry-run', 'Dry run: Show what would be deleted without deleting')
-            .option('--stale [days]', 'Find stale branches (default: 90 days)', '90')
+            .option('--stale [days]', 'Find stale branches (default: 90 days)')
             .action(async (options) => {
                 await checkGitRepo();
 
-                const staleDays = options.stale === true ? 90 : parseInt(options.stale, 10);
+                // options.stale is undefined when not passed, true when passed without value, or a string when passed with value
                 const isStale = options.stale !== undefined;
+                const staleDays = options.stale === true || options.stale === undefined ? 90 : parseInt(options.stale, 10);
 
                 await cleanDeletedBranches({
                     interactive: options.interactive || false,
