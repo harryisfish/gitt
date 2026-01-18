@@ -30,24 +30,21 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         // Phase 1: Discovery
         const discoveryTasks = new Listr([
             {
-                title: 'Switch to main branch',
+                title: 'Fetch and switch to main branch',
                 task: async (ctx: any) => {
                     const mainBranch = await getMainBranch();
                     ctx.mainBranch = mainBranch;
                     const branchInfo = await git.branchLocal();
                     ctx.currentBranch = branchInfo.current;
 
-                    // Always switch to main branch first
+                    // Fetch main branch first to avoid conflicts
+                    await git.fetch(['origin', mainBranch]);
+
+                    // Switch to main branch if not already on it
                     if (ctx.currentBranch !== mainBranch) {
                         await git.checkout(mainBranch);
                         await git.pull();
                     }
-                }
-            },
-            {
-                title: 'Fetch from remote',
-                task: async (ctx: any) => {
-                    await git.fetch(['origin', ctx.mainBranch]);
                 }
             },
             {
