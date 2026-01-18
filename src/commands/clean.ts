@@ -6,6 +6,8 @@ import { GitError, UserCancelError, printSuccess } from '../errors';
 import { getMainBranch, isBranchMerged, getWorktrees, getBranchLastCommitTime } from '../utils/git';
 import { readConfigFile } from '../utils/config';
 
+type BranchCandidate = { name: string; reason: string };
+
 const git = simpleGit();
 
 interface CleanOptions {
@@ -24,7 +26,8 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         const state = {
             mainBranch: '',
             currentBranch: '',
-            deletedBranches: [] as { name: string; isMerged: boolean; reason?: string }[]
+            deletedBranches: [] as BranchCandidate[],
+            isStaleMode: options.stale || false
         };
 
         // Phase 1: Discovery
@@ -96,13 +99,18 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
                     // Filter out worktree branches
                     candidates = candidates.filter(c => !worktreeBranches.includes(c.name));
 
-                    // Check merge status for each branch
-                    const branchesWithStatus = await Promise.all(candidates.map(async (c) => {
-                        const isMerged = await isBranchMerged(c.name, ctx.mainBranch);
-                        return { ...c, isMerged };
-                    }));
-
-                    ctx.deletedBranches = branchesWithStatus;
+                    // For stale mode, check merge status; for gone mode, skip (PR completed = safe to delete)
+                    if (options.stale) {
+                        const branchesWithStatus = await Promise.all(candidates.map(async (c) => {
+                            const isMerged = await isBranchMerged(c.name, ctx.mainBranch);
+                            return { ...c, isMerged };
+                        }));
+                        // In stale mode, only auto-delete merged branches
+                        ctx.deletedBranches = branchesWithStatus.filter(b => b.isMerged);
+                    } else {
+                        // Gone mode: remote deleted = PR completed, safe to delete all
+                        ctx.deletedBranches = candidates;
+                    }
                 }
             }
         ]);
@@ -118,9 +126,9 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
         if (options.interactive) {
             try {
                 const choices = state.deletedBranches.map(b => ({
-                    name: `${b.name} (${b.reason}${b.isMerged ? '' : ', Unmerged'})`,
+                    name: `${b.name} (${b.reason})`,
                     value: b,
-                    checked: b.isMerged // Only check merged branches by default
+                    checked: true // All candidates are safe to delete
                 }));
 
                 const selected = await checkbox({
@@ -132,16 +140,8 @@ export async function cleanDeletedBranches(options: CleanOptions = {}) {
                 // User cancelled
                 throw new UserCancelError('Operation cancelled');
             }
-        } else {
-            // Auto mode: Filter out unmerged branches
-            const unmerged = state.deletedBranches.filter(b => !b.isMerged);
-            state.deletedBranches = state.deletedBranches.filter(b => b.isMerged);
-
-            if (state.deletedBranches.length === 0 && unmerged.length > 0) {
-                printSuccess(`No merged branches to clean up (${unmerged.length} unmerged branch${unmerged.length > 1 ? 'es' : ''} skipped, use -i to review)`);
-                return;
-            }
         }
+        // Non-interactive mode: delete all candidates (already filtered in discovery phase)
 
         if (state.deletedBranches.length === 0) {
             printSuccess('No branches selected for deletion');
