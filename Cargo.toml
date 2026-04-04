@@ -8,5 +8,5 @@ license = "MIT"
 [dependencies]
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
-git2 = "0.20"
+git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 anyhow = "1"
