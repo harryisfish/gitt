@@ -1,4 +1,7 @@
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct PullRequest {
@@ -84,6 +87,52 @@ pub fn load_prs() -> Vec<PullRequest> {
             })
         })
         .collect()
+}
+
+pub struct PrLoader {
+    rx: mpsc::Receiver<(GhStatus, Vec<PullRequest>)>,
+    last_refresh: Instant,
+}
+
+const PR_REFRESH_INTERVAL_SECS: u64 = 30;
+
+impl PrLoader {
+    pub fn spawn() -> Self {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let status = check_gh();
+            let prs = match &status {
+                GhStatus::Ready => load_prs(),
+                _ => Vec::new(),
+            };
+            let _ = tx.send((status, prs));
+        });
+        Self {
+            rx,
+            last_refresh: Instant::now(),
+        }
+    }
+
+    pub fn try_recv(&self) -> Option<(GhStatus, Vec<PullRequest>)> {
+        self.rx.try_recv().ok()
+    }
+
+    pub fn refresh(&mut self) -> Option<mpsc::Receiver<(GhStatus, Vec<PullRequest>)>> {
+        if self.last_refresh.elapsed().as_secs() < PR_REFRESH_INTERVAL_SECS {
+            return None;
+        }
+        self.last_refresh = Instant::now();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let status = check_gh();
+            let prs = match &status {
+                GhStatus::Ready => load_prs(),
+                _ => Vec::new(),
+            };
+            let _ = tx.send((status, prs));
+        });
+        Some(rx)
+    }
 }
 
 fn summarize_checks(checks: &[serde_json::Value]) -> String {

@@ -3,8 +3,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::Rect;
 
 use crate::git::{self, CommitDetail, GitState};
-use crate::github::{self, GhStatus, PullRequest};
+use crate::github::{GhStatus, PrLoader, PullRequest};
 use crate::update::UpdateChecker;
+use std::sync::mpsc;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tab {
@@ -52,17 +53,14 @@ pub struct App {
     pub detail_scroll: usize,
     pub gh_status: GhStatus,
     pub prs: Vec<PullRequest>,
+    pr_loader: PrLoader,
+    pr_pending: Option<mpsc::Receiver<(GhStatus, Vec<PullRequest>)>>,
     update_checker: UpdateChecker,
 }
 
 impl App {
     pub fn new() -> Result<Self> {
         let git = git::load_git_state()?;
-        let gh_status = github::check_gh();
-        let prs = match &gh_status {
-            GhStatus::Ready => github::load_prs(),
-            _ => Vec::new(),
-        };
         Ok(Self {
             tab: Tab::Status,
             git,
@@ -72,17 +70,39 @@ impl App {
             update_available: None,
             detail: None,
             detail_scroll: 0,
-            gh_status,
-            prs,
+            gh_status: GhStatus::NotInstalled,
+            prs: Vec::new(),
+            pr_loader: PrLoader::spawn(),
+            pr_pending: None,
             update_checker: UpdateChecker::spawn(),
         })
     }
 
     pub fn refresh(&mut self) -> Result<()> {
         self.git = git::load_git_state()?;
-        if matches!(self.gh_status, GhStatus::Ready) {
-            self.prs = github::load_prs();
+
+        // Check initial PR load
+        if let Some(result) = self.pr_loader.try_recv() {
+            self.gh_status = result.0;
+            self.prs = result.1;
         }
+
+        // Check pending PR refresh
+        if let Some(rx) = &self.pr_pending {
+            if let Ok(result) = rx.try_recv() {
+                self.gh_status = result.0;
+                self.prs = result.1;
+                self.pr_pending = None;
+            }
+        }
+
+        // Trigger background PR refresh every 30s
+        if self.pr_pending.is_none() {
+            if let Some(rx) = self.pr_loader.refresh() {
+                self.pr_pending = Some(rx);
+            }
+        }
+
         if self.update_available.is_none() {
             if let Some(version) = self.update_checker.try_recv() {
                 self.update_available = version;
