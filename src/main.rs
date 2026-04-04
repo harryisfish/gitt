@@ -1,6 +1,7 @@
 mod app;
 mod git;
 mod github;
+mod self_update;
 mod ui;
 mod update;
 
@@ -15,7 +16,39 @@ use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 use std::io;
 use std::time::{Duration, Instant};
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "update" => return self_update::run_update(),
+            "--version" | "-v" => {
+                println!("gitt {VERSION}");
+                return Ok(());
+            }
+            "--help" | "-h" => {
+                println!("gitt {VERSION} — lightweight TUI git status monitor");
+                println!();
+                println!("Usage: gitt [command]");
+                println!();
+                println!("Commands:");
+                println!("  update    Update gitt to the latest version");
+                println!();
+                println!("Options:");
+                println!("  -v, --version  Print version");
+                println!("  -h, --help     Print help");
+                return Ok(());
+            }
+            other => {
+                eprintln!("Unknown command: {other}");
+                eprintln!("Run 'gitt --help' for usage");
+                std::process::exit(1);
+            }
+        }
+    }
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
