@@ -1,6 +1,6 @@
 [package]
 name = "gitt"
-version = "2.2.3"
+version = "2.3.0"
 edition = "2024"
 description = "A lightweight TUI git status monitor for terminal split panes"
 license = "MIT"

@@ -7,14 +7,10 @@ use std::time::Instant;
 pub struct PullRequest {
     pub number: u64,
     pub title: String,
-    pub state: String,
-    pub author: String,
-    pub branch: String,
     pub additions: u64,
     pub deletions: u64,
     pub review_decision: String,
     pub checks_status: String,
-    pub url: String,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +39,7 @@ pub fn load_prs() -> Vec<PullRequest> {
     let output = Command::new("gh")
         .args([
             "pr", "list",
-            "--json", "number,title,state,author,headRefName,additions,deletions,reviewDecision,statusCheckRollup,url",
+            "--json", "number,title,additions,deletions,reviewDecision,statusCheckRollup",
             "--limit", "20",
         ])
         .output();
@@ -73,9 +69,6 @@ pub fn load_prs() -> Vec<PullRequest> {
             Some(PullRequest {
                 number: pr.get("number")?.as_u64()?,
                 title: pr.get("title")?.as_str()?.to_string(),
-                state: pr.get("state")?.as_str()?.to_string(),
-                author: pr.get("author")?.get("login")?.as_str()?.to_string(),
-                branch: pr.get("headRefName")?.as_str()?.to_string(),
                 additions: pr.get("additions")?.as_u64().unwrap_or(0),
                 deletions: pr.get("deletions")?.as_u64().unwrap_or(0),
                 review_decision: pr.get("reviewDecision")
@@ -83,7 +76,6 @@ pub fn load_prs() -> Vec<PullRequest> {
                     .unwrap_or("")
                     .to_string(),
                 checks_status: checks,
-                url: pr.get("url")?.as_str()?.to_string(),
             })
         })
         .collect()

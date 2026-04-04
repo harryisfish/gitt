@@ -1,4 +1,5 @@
 mod app;
+mod config;
 mod git;
 mod github;
 mod self_update;

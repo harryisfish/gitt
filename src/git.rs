@@ -33,7 +33,6 @@ pub enum UnstagedStatus {
 pub struct BranchInfo {
     pub name: String,
     pub is_head: bool,
-    pub upstream: Option<String>,
     pub ahead: usize,
     pub behind: usize,
 }
@@ -42,7 +41,6 @@ pub struct BranchInfo {
 pub struct CommitInfo {
     pub hash: String,
     pub message: String,
-    pub author: String,
     pub time: String,
     pub tag: Option<String>,
 }
@@ -144,7 +142,6 @@ pub struct GitState {
     pub branches: Vec<BranchInfo>,
     pub log: Vec<CommitInfo>,
     pub head_branch: String,
-    pub repo_name: String,
 }
 
 impl GitState {
@@ -172,12 +169,6 @@ impl GitState {
 
 pub fn load_git_state() -> Result<GitState> {
     let repo = Repository::discover(".")?;
-    let repo_name = repo
-        .workdir()
-        .and_then(|p| p.file_name())
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown")
-        .to_string();
 
     let files = get_status(&repo)?;
     let branches = get_branches(&repo)?;
@@ -189,7 +180,6 @@ pub fn load_git_state() -> Result<GitState> {
         branches,
         log,
         head_branch,
-        repo_name,
     })
 }
 
@@ -257,11 +247,6 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>> {
             .to_string();
         let is_head = head_name.as_deref() == Some(&name);
 
-        let upstream = branch
-            .upstream()
-            .ok()
-            .and_then(|u| u.name().ok().flatten().map(|s| s.to_string()));
-
         let (ahead, behind) = if let (Some(local_oid), Ok(upstream_branch)) =
             (branch.get().target(), branch.upstream())
         {
@@ -278,7 +263,6 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>> {
         branches.push(BranchInfo {
             name,
             is_head,
-            upstream,
             ahead,
             behind,
         });
@@ -331,7 +315,6 @@ fn get_log(repo: &Repository) -> Result<Vec<CommitInfo>> {
                 .summary()
                 .unwrap_or("")
                 .to_string(),
-            author: commit.author().name().unwrap_or("").to_string(),
             time: format_relative_time(timestamp),
             tag: tags.get(&oid).cloned(),
         });

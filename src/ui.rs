@@ -39,6 +39,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Tab::Branch => draw_branches(f, app, layout[2]),
             Tab::Log => draw_log(f, app, layout[2]),
             Tab::PR => draw_prs(f, app, layout[2]),
+            Tab::Settings => draw_settings(f, app, layout[2]),
         }
         draw_footer(f, app, layout[3]);
     }
@@ -49,7 +50,7 @@ fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
     let mut spans = Vec::new();
     let mut x = area.x + 1;
 
-    for (i, tab) in Tab::ALL.iter().enumerate() {
+    for (i, tab) in app.visible_tabs.iter().enumerate() {
         let label = format!(" {} ", tab.label());
         let width = label.len() as u16;
 
@@ -63,7 +64,7 @@ fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
 
         spans.push(Span::styled(label, style));
 
-        if i < Tab::ALL.len() - 1 {
+        if i < app.visible_tabs.len() - 1 {
             spans.push(Span::raw(" "));
             x += width + 1;
         } else {
@@ -289,6 +290,50 @@ fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
     );
 
     let mut state = ListState::default().with_selected(Some(app.selected));
+    f.render_stateful_widget(list, area, &mut state);
+}
+
+fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
+    use crate::app::SettingsCursor;
+
+    let rows = app.settings_flat_rows();
+    let cursor_idx = app.settings_cursor_index();
+
+    let items: Vec<ListItem> = rows
+        .iter()
+        .map(|row| match row {
+            SettingsCursor::Group(gi) => {
+                let group = &app.settings_groups[*gi];
+                let arrow = if group.expanded { "▼" } else { "▶" };
+                let line = Line::from(vec![
+                    Span::styled(format!(" {arrow} "), Style::default().fg(ACCENT)),
+                    Span::styled(
+                        &group.label,
+                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    ),
+                ]);
+                ListItem::new(line)
+            }
+            SettingsCursor::Item(gi, ii) => {
+                let item = &app.settings_groups[*gi].items[*ii];
+                let toggle = if item.enabled { "●" } else { "○" };
+                let toggle_color = if item.enabled { STAGED_COLOR } else { DIM };
+                let line = Line::from(vec![
+                    Span::styled(format!("   {toggle} "), Style::default().fg(toggle_color)),
+                    Span::styled(&item.label, Style::default().fg(Color::White)),
+                ]);
+                ListItem::new(line)
+            }
+        })
+        .collect();
+
+    let list = List::new(items).highlight_style(
+        Style::default()
+            .bg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    let mut state = ListState::default().with_selected(Some(cursor_idx));
     f.render_stateful_widget(list, area, &mut state);
 }
 

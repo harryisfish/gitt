@@ -26,6 +26,11 @@ impl UpdateChecker {
         Self { rx }
     }
 
+    pub fn disabled() -> Self {
+        let (_tx, rx) = mpsc::channel();
+        Self { rx }
+    }
+
     /// Non-blocking: returns Some(new_version) if update available
     pub fn try_recv(&self) -> Option<Option<String>> {
         self.rx.try_recv().ok()
