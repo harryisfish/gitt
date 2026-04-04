@@ -64,10 +64,6 @@ fn get_release_via_gh(target: &str) -> Result<(String, String)> {
         .args([
             "api",
             &format!("repos/{REPO}/releases/latest"),
-            "--jq",
-            &format!(
-                r#""\(.tag_name)\n\(.assets[] | select(.name == "gitt-{target}.tar.gz") | .browser_download_url)"#
-            ),
         ])
         .output()?;
 
@@ -75,16 +71,31 @@ fn get_release_via_gh(target: &str) -> Result<(String, String)> {
         bail!("gh api failed");
     }
 
-    let stdout = String::from_utf8(output.stdout)?;
-    let mut lines = stdout.lines();
-    let tag = lines.next().unwrap_or("").to_string();
-    let url = lines.next().unwrap_or("").to_string();
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let tag = json["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
 
-    if tag.is_empty() || url.is_empty() {
+    let asset_name = format!("gitt-{target}.tar.gz");
+    let download_url = json["assets"]
+        .as_array()
+        .and_then(|assets| {
+            assets.iter().find_map(|a| {
+                if a["name"].as_str() == Some(&asset_name) {
+                    a["browser_download_url"].as_str().map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or_default();
+
+    if tag.is_empty() || download_url.is_empty() {
         bail!("Failed to parse gh output");
     }
 
-    Ok((tag, url))
+    Ok((tag, download_url))
 }
 
 fn get_release_via_api(target: &str) -> Result<(String, String)> {
