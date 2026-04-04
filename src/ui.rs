@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, List, ListItem, ListState, Padding},
+    widgets::{Block, List, ListItem, ListState, Padding, Wrap},
 };
 
 use crate::app::{App, Tab};
@@ -29,13 +29,17 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     draw_tabs(f, app, layout[0]);
     draw_separator(f, layout[1]);
 
-    match app.tab {
-        Tab::Status => draw_status(f, app, layout[2]),
-        Tab::Branch => draw_branches(f, app, layout[2]),
-        Tab::Log => draw_log(f, app, layout[2]),
+    if app.detail.is_some() {
+        draw_detail(f, app, layout[2]);
+        draw_detail_footer(f, layout[3]);
+    } else {
+        match app.tab {
+            Tab::Status => draw_status(f, app, layout[2]),
+            Tab::Branch => draw_branches(f, app, layout[2]),
+            Tab::Log => draw_log(f, app, layout[2]),
+        }
+        draw_footer(f, app, layout[3]);
     }
-
-    draw_footer(f, app, layout[3]);
 }
 
 fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
@@ -179,17 +183,25 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
         .log
         .iter()
         .map(|commit| {
-            let line = Line::from(vec![
+            let short_hash = &commit.hash[..7.min(commit.hash.len())];
+            let mut spans = vec![
                 Span::styled(
-                    format!(" {} ", &commit.hash),
+                    format!(" {short_hash} "),
                     Style::default().fg(ACCENT),
                 ),
                 Span::styled(&commit.message, Style::default().fg(Color::White)),
-                Span::styled(
-                    format!("  {} ", &commit.time),
-                    Style::default().fg(DIM),
-                ),
-            ]);
+            ];
+            if let Some(tag) = &commit.tag {
+                spans.push(Span::styled(
+                    format!(" {tag}"),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
+            spans.push(Span::styled(
+                format!("  {} ", &commit.time),
+                Style::default().fg(DIM),
+            ));
+            let line = Line::from(spans);
             ListItem::new(line)
         })
         .collect();
@@ -202,6 +214,104 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
 
     let mut state = ListState::default().with_selected(Some(app.selected));
     f.render_stateful_widget(list, area, &mut state);
+}
+
+fn draw_detail(f: &mut Frame, app: &mut App, area: Rect) {
+    let detail = match &app.detail {
+        Some(d) => d,
+        None => return,
+    };
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    // Header
+    lines.push(Line::from(vec![
+        Span::styled(" commit ", Style::default().fg(DIM)),
+        Span::styled(&detail.hash, Style::default().fg(ACCENT)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled(" author ", Style::default().fg(DIM)),
+        Span::styled(&detail.author, Style::default().fg(Color::White)),
+        Span::styled(format!(" <{}>", &detail.email), Style::default().fg(DIM)),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled(" date   ", Style::default().fg(DIM)),
+        Span::styled(&detail.time, Style::default().fg(Color::White)),
+    ]));
+    lines.push(Line::from(""));
+
+    // Message
+    for msg_line in detail.message.lines() {
+        lines.push(Line::from(Span::styled(
+            format!("   {msg_line}"),
+            Style::default().fg(Color::White),
+        )));
+    }
+    lines.push(Line::from(""));
+
+    // Separator
+    lines.push(Line::from(Span::styled(
+        format!(" {} file(s) changed", detail.files.len()),
+        Style::default().fg(DIM),
+    )));
+    lines.push(Line::from(""));
+
+    // Files
+    for file in &detail.files {
+        let status_color = match file.status {
+            'A' => STAGED_COLOR,
+            'D' => UNTRACKED_COLOR,
+            'M' => UNSTAGED_COLOR,
+            _ => DIM,
+        };
+        let mut spans = vec![
+            Span::styled(format!(" {} ", file.status), Style::default().fg(status_color)),
+            Span::styled(&file.path, Style::default().fg(Color::White)),
+        ];
+        if file.additions > 0 || file.deletions > 0 {
+            spans.push(Span::raw(" "));
+            if file.additions > 0 {
+                spans.push(Span::styled(
+                    format!("+{}", file.additions),
+                    Style::default().fg(STAGED_COLOR),
+                ));
+            }
+            if file.deletions > 0 {
+                spans.push(Span::styled(
+                    format!("-{}", file.deletions),
+                    Style::default().fg(UNTRACKED_COLOR),
+                ));
+            }
+        }
+        lines.push(Line::from(spans));
+    }
+
+    // Apply scroll
+    let visible_height = area.height as usize;
+    let max_scroll = lines.len().saturating_sub(visible_height);
+    app.detail_scroll = app.detail_scroll.min(max_scroll);
+
+    let visible_lines: Vec<Line> = lines
+        .into_iter()
+        .skip(app.detail_scroll)
+        .take(visible_height)
+        .collect();
+
+    let paragraph = ratatui::widgets::Paragraph::new(visible_lines)
+        .wrap(Wrap { trim: false });
+    f.render_widget(paragraph, area);
+}
+
+fn draw_detail_footer(f: &mut Frame, area: Rect) {
+    let spans = vec![
+        Span::styled(" Esc", Style::default().fg(ACCENT)),
+        Span::styled(" back", Style::default().fg(DIM)),
+        Span::styled("  j/k", Style::default().fg(ACCENT)),
+        Span::styled(" scroll", Style::default().fg(DIM)),
+    ];
+    let footer = ratatui::widgets::Paragraph::new(Line::from(spans))
+        .style(Style::default().bg(Color::Rgb(30, 30, 30)));
+    f.render_widget(footer, area);
 }
 
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {

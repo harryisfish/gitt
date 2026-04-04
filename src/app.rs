@@ -2,7 +2,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
-use crate::git::{self, GitState};
+use crate::git::{self, CommitDetail, GitState};
 use crate::update::UpdateChecker;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,6 +44,8 @@ pub struct App {
     pub scroll_offset: usize,
     pub tab_areas: Vec<Rect>,
     pub update_available: Option<String>,
+    pub detail: Option<CommitDetail>,
+    pub detail_scroll: usize,
     update_checker: UpdateChecker,
 }
 
@@ -57,6 +59,8 @@ impl App {
             scroll_offset: 0,
             tab_areas: Vec::new(),
             update_available: None,
+            detail: None,
+            detail_scroll: 0,
             update_checker: UpdateChecker::spawn(),
         })
     }
@@ -114,14 +118,48 @@ impl App {
         self.switch_tab(Tab::ALL[idx]);
     }
 
+    fn open_detail(&mut self) {
+        if self.tab == Tab::Log {
+            if let Some(commit) = self.git.log.get(self.selected) {
+                if let Ok(detail) = git::get_commit_detail(&commit.hash) {
+                    self.detail = Some(detail);
+                    self.detail_scroll = 0;
+                }
+            }
+        }
+    }
+
+    fn close_detail(&mut self) {
+        self.detail = None;
+        self.detail_scroll = 0;
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> AppEvent {
-        // Ctrl+C or q to quit
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return AppEvent::Quit;
         }
 
+        // Detail view mode
+        if self.detail.is_some() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => self.close_detail(),
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.detail_scroll = self.detail_scroll.saturating_sub(1);
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.detail_scroll += 1;
+                }
+                _ => {}
+            }
+            return AppEvent::Continue;
+        }
+
         match key.code {
             KeyCode::Char('q') => AppEvent::Quit,
+            KeyCode::Enter => {
+                self.open_detail();
+                AppEvent::Continue
+            }
             KeyCode::Char('1') => {
                 self.switch_tab(Tab::Status);
                 AppEvent::Continue

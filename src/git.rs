@@ -1,5 +1,6 @@
 use anyhow::Result;
 use git2::{Repository, StatusOptions, StatusShow};
+use std::collections::HashMap;
 
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,98 @@ pub struct CommitInfo {
     pub message: String,
     pub author: String,
     pub time: String,
+    pub tag: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommitDetail {
+    pub hash: String,
+    pub message: String,
+    pub author: String,
+    pub email: String,
+    pub time: String,
+    pub files: Vec<DiffFile>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiffFile {
+    pub path: String,
+    pub status: char,
+    pub additions: usize,
+    pub deletions: usize,
+}
+
+pub fn get_commit_detail(hash: &str) -> Result<CommitDetail> {
+    let repo = Repository::discover(".")?;
+    let oid = git2::Oid::from_str(hash)?;
+    let commit = repo.find_commit(oid)?;
+
+    let tree = commit.tree()?;
+    let parent_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
+
+    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
+    let stats = diff.stats()?;
+    let _ = stats;
+
+    let mut files = Vec::new();
+    for delta in diff.deltas() {
+        let path = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path())
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let status = match delta.status() {
+            git2::Delta::Added => 'A',
+            git2::Delta::Deleted => 'D',
+            git2::Delta::Modified => 'M',
+            git2::Delta::Renamed => 'R',
+            git2::Delta::Copied => 'C',
+            _ => '?',
+        };
+        files.push(DiffFile {
+            path,
+            status,
+            additions: 0,
+            deletions: 0,
+        });
+    }
+
+    // Get per-file stats
+    let mut file_idx = 0;
+    diff.foreach(
+        &mut |_, _| { file_idx += 1; true },
+        None,
+        None,
+        Some(&mut |delta, _hunk, line| {
+            let idx = files.iter().position(|f| {
+                let dp = delta.new_file().path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                f.path == dp
+            });
+            if let Some(i) = idx {
+                match line.origin() {
+                    '+' => files[i].additions += 1,
+                    '-' => files[i].deletions += 1,
+                    _ => {}
+                }
+            }
+            true
+        }),
+    )?;
+
+    let timestamp = commit.time().seconds();
+
+    Ok(CommitDetail {
+        hash: format!("{}", oid),
+        message: commit.message().unwrap_or("").trim().to_string(),
+        author: commit.author().name().unwrap_or("").to_string(),
+        email: commit.author().email().unwrap_or("").to_string(),
+        time: format_relative_time(timestamp),
+        files,
+    })
 }
 
 #[derive(Debug)]
@@ -197,7 +290,27 @@ fn get_branches(repo: &Repository) -> Result<Vec<BranchInfo>> {
     Ok(branches)
 }
 
+fn get_tags(repo: &Repository) -> HashMap<git2::Oid, String> {
+    let mut tags = HashMap::new();
+    let _ = repo.tag_foreach(|oid, name| {
+        let name = String::from_utf8_lossy(name)
+            .trim_start_matches("refs/tags/")
+            .to_string();
+        // Resolve annotated tags to their target commit
+        let commit_oid = repo
+            .find_tag(oid)
+            .ok()
+            .and_then(|tag| tag.target().ok().map(|t| t.id()))
+            .unwrap_or(oid);
+        tags.insert(commit_oid, name);
+        true
+    });
+    tags
+}
+
 fn get_log(repo: &Repository) -> Result<Vec<CommitInfo>> {
+    let tags = get_tags(repo);
+
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
     revwalk.set_sorting(git2::Sort::TIME)?;
@@ -213,13 +326,14 @@ fn get_log(repo: &Repository) -> Result<Vec<CommitInfo>> {
         let timestamp = time.seconds();
 
         log.push(CommitInfo {
-            hash: format!("{:.7}", oid),
+            hash: format!("{}", oid),
             message: commit
                 .summary()
                 .unwrap_or("")
                 .to_string(),
             author: commit.author().name().unwrap_or("").to_string(),
             time: format_relative_time(timestamp),
+            tag: tags.get(&oid).cloned(),
         });
     }
 
