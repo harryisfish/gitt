@@ -25,23 +25,48 @@ pub fn run_update() -> Result<()> {
     let binary = download(&download_url)?;
     let current_exe = env::current_exe()?;
 
-    // Replace binary: rename old, write new, remove old
-    let backup = current_exe.with_extension("old");
-    fs::rename(&current_exe, &backup)?;
+    // Check if we can write directly
+    let needs_sudo = !can_write(&current_exe);
 
-    if let Err(e) = fs::write(&current_exe, &binary) {
-        // Restore backup on failure
-        let _ = fs::rename(&backup, &current_exe);
-        bail!("Failed to write new binary: {e}");
+    if needs_sudo {
+        // Write to temp file, then sudo mv
+        let tmp = std::env::temp_dir().join("gitt-update");
+        fs::write(&tmp, &binary)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755))?;
+        }
+
+        println!("Installing to {} (requires sudo)...", current_exe.display());
+        let status = Command::new("sudo")
+            .args(["mv", "-f"])
+            .arg(&tmp)
+            .arg(&current_exe)
+            .status()?;
+
+        if !status.success() {
+            let _ = fs::remove_file(&tmp);
+            bail!("sudo mv failed");
+        }
+    } else {
+        let backup = current_exe.with_extension("old");
+        fs::rename(&current_exe, &backup)?;
+
+        if let Err(e) = fs::write(&current_exe, &binary) {
+            let _ = fs::rename(&backup, &current_exe);
+            bail!("Failed to write new binary: {e}");
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&current_exe, fs::Permissions::from_mode(0o755))?;
+        }
+
+        let _ = fs::remove_file(&backup);
     }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&current_exe, fs::Permissions::from_mode(0o755))?;
-    }
-
-    let _ = fs::remove_file(&backup);
 
     println!("Updated to v{latest_clean}!");
     Ok(())
@@ -180,6 +205,21 @@ fn extract_binary(tarball: &[u8]) -> Result<Vec<u8>> {
     }
 
     bail!("Binary not found in archive");
+}
+
+fn can_write(path: &std::path::Path) -> bool {
+    // Check if we can write to the file's parent directory
+    path.parent()
+        .map(|dir| {
+            let test = dir.join(".gitt-write-test");
+            if fs::write(&test, b"").is_ok() {
+                let _ = fs::remove_file(&test);
+                true
+            } else {
+                false
+            }
+        })
+        .unwrap_or(false)
 }
 
 fn get_target() -> String {
