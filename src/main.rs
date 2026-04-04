@@ -1,5 +1,6 @@
 mod app;
 mod git;
+mod github;
 mod ui;
 mod update;
 

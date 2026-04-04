@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::app::{App, Tab};
 use crate::git::{StagedStatus, UnstagedStatus};
+use crate::github::GhStatus;
 
 const ACCENT: Color = Color::Cyan;
 const STAGED_COLOR: Color = Color::Green;
@@ -37,6 +38,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Tab::Status => draw_status(f, app, layout[2]),
             Tab::Branch => draw_branches(f, app, layout[2]),
             Tab::Log => draw_log(f, app, layout[2]),
+            Tab::PR => draw_prs(f, app, layout[2]),
         }
         draw_footer(f, app, layout[3]);
     }
@@ -202,6 +204,80 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
                 Style::default().fg(DIM),
             ));
             let line = Line::from(spans);
+            ListItem::new(line)
+        })
+        .collect();
+
+    let list = List::new(items).highlight_style(
+        Style::default()
+            .bg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    let mut state = ListState::default().with_selected(Some(app.selected));
+    f.render_stateful_widget(list, area, &mut state);
+}
+
+fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
+    match &app.gh_status {
+        GhStatus::NotInstalled => {
+            let msg = ratatui::widgets::Paragraph::new(" gh CLI not installed\n Run: brew install gh")
+                .style(Style::default().fg(UNTRACKED_COLOR));
+            f.render_widget(msg, area);
+            return;
+        }
+        GhStatus::NotAuthenticated => {
+            let msg = ratatui::widgets::Paragraph::new(" gh not authenticated\n Run: gh auth login")
+                .style(Style::default().fg(UNSTAGED_COLOR));
+            f.render_widget(msg, area);
+            return;
+        }
+        GhStatus::Ready => {}
+    }
+
+    if app.prs.is_empty() {
+        let msg = ratatui::widgets::Paragraph::new(" No open pull requests")
+            .style(Style::default().fg(DIM));
+        f.render_widget(msg, area);
+        return;
+    }
+
+    let items: Vec<ListItem> = app
+        .prs
+        .iter()
+        .map(|pr| {
+            let checks_color = if pr.checks_status.contains("failed") {
+                UNTRACKED_COLOR
+            } else if pr.checks_status.contains("pending") {
+                UNSTAGED_COLOR
+            } else {
+                STAGED_COLOR
+            };
+
+            let review_icon = match pr.review_decision.as_str() {
+                "APPROVED" => Span::styled(" ✓", Style::default().fg(STAGED_COLOR)),
+                "CHANGES_REQUESTED" => Span::styled(" ✗", Style::default().fg(UNTRACKED_COLOR)),
+                "REVIEW_REQUIRED" => Span::styled(" ○", Style::default().fg(UNSTAGED_COLOR)),
+                _ => Span::raw(""),
+            };
+
+            let line = Line::from(vec![
+                Span::styled(
+                    format!(" #{} ", pr.number),
+                    Style::default().fg(ACCENT),
+                ),
+                Span::styled(&pr.title, Style::default().fg(Color::White)),
+                review_icon,
+                Span::styled(
+                    format!(" [{}]", pr.checks_status),
+                    Style::default().fg(checks_color),
+                ),
+                Span::styled(
+                    format!(" +{}-{}", pr.additions, pr.deletions),
+                    Style::default().fg(DIM),
+                ),
+            ]);
+
             ListItem::new(line)
         })
         .collect();

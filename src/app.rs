@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::Rect;
 
 use crate::git::{self, CommitDetail, GitState};
+use crate::github::{self, GhStatus, PullRequest};
 use crate::update::UpdateChecker;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -10,16 +11,18 @@ pub enum Tab {
     Status,
     Branch,
     Log,
+    PR,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 3] = [Tab::Status, Tab::Branch, Tab::Log];
+    pub const ALL: [Tab; 4] = [Tab::Status, Tab::Branch, Tab::Log, Tab::PR];
 
     pub fn label(&self) -> &str {
         match self {
             Tab::Status => "Status",
             Tab::Branch => "Branch",
             Tab::Log => "Log",
+            Tab::PR => "PR",
         }
     }
 
@@ -28,6 +31,7 @@ impl Tab {
             Tab::Status => 0,
             Tab::Branch => 1,
             Tab::Log => 2,
+            Tab::PR => 3,
         }
     }
 }
@@ -46,12 +50,19 @@ pub struct App {
     pub update_available: Option<String>,
     pub detail: Option<CommitDetail>,
     pub detail_scroll: usize,
+    pub gh_status: GhStatus,
+    pub prs: Vec<PullRequest>,
     update_checker: UpdateChecker,
 }
 
 impl App {
     pub fn new() -> Result<Self> {
         let git = git::load_git_state()?;
+        let gh_status = github::check_gh();
+        let prs = match &gh_status {
+            GhStatus::Ready => github::load_prs(),
+            _ => Vec::new(),
+        };
         Ok(Self {
             tab: Tab::Status,
             git,
@@ -61,12 +72,17 @@ impl App {
             update_available: None,
             detail: None,
             detail_scroll: 0,
+            gh_status,
+            prs,
             update_checker: UpdateChecker::spawn(),
         })
     }
 
     pub fn refresh(&mut self) -> Result<()> {
         self.git = git::load_git_state()?;
+        if matches!(self.gh_status, GhStatus::Ready) {
+            self.prs = github::load_prs();
+        }
         if self.update_available.is_none() {
             if let Some(version) = self.update_checker.try_recv() {
                 self.update_available = version;
@@ -80,6 +96,7 @@ impl App {
             Tab::Status => self.git.files.len(),
             Tab::Branch => self.git.branches.len(),
             Tab::Log => self.git.log.len(),
+            Tab::PR => self.prs.len(),
         }
     }
 
@@ -170,6 +187,10 @@ impl App {
             }
             KeyCode::Char('3') => {
                 self.switch_tab(Tab::Log);
+                AppEvent::Continue
+            }
+            KeyCode::Char('4') => {
+                self.switch_tab(Tab::PR);
                 AppEvent::Continue
             }
             KeyCode::Tab => {
