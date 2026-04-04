@@ -12,16 +12,16 @@ YELLOW='\033[33m'
 RED='\033[31m'
 RESET='\033[0m'
 
-info()  { printf "  ${DIM}%s${RESET}\n" "$1"; }
-step()  { printf "  ${CYAN}>${RESET} %s\n" "$1"; }
-ok()    { printf "  ${GREEN}✓${RESET} %s\n" "$1"; }
-warn()  { printf "  ${YELLOW}!${RESET} %s\n" "$1"; }
-err()   { printf "  ${RED}✗${RESET} %s\n" "$1"; exit 1; }
+info()  { printf "  %b%s%b\n" "$DIM" "$1" "$RESET"; }
+step()  { printf "  %b>%b %s\n" "$CYAN" "$RESET" "$1"; }
+ok()    { printf "  %b✓%b %b\n" "$GREEN" "$RESET" "$1"; }
+warn()  { printf "  %b!%b %s\n" "$YELLOW" "$RESET" "$1"; }
+err()   { printf "  %b✗%b %s\n" "$RED" "$RESET" "$1"; exit 1; }
 
 # Banner
 printf "\n"
-printf "  ${BOLD}${CYAN}gitt${RESET} ${DIM}— lightweight TUI git status monitor${RESET}\n"
-printf "  ${DIM}─────────────────────────────────────${RESET}\n"
+printf "  %b%bgitt%b %b— lightweight TUI git status monitor%b\n" "$BOLD" "$CYAN" "$RESET" "$DIM" "$RESET"
+printf "  %b─────────────────────────────────────%b\n" "$DIM" "$RESET"
 printf "\n"
 
 # Detect platform
@@ -52,7 +52,7 @@ ok "Latest version: ${BOLD}${LATEST}${RESET}"
 
 # Download
 URL="https://github.com/${REPO}/releases/download/${LATEST}/gitt-${TARGET}.tar.gz"
-step "Downloading ${DIM}${URL}${RESET}"
+step "Downloading..."
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -69,7 +69,7 @@ else
     mkdir -p "$INSTALL_DIR"
 fi
 
-step "Installing to ${BOLD}${INSTALL_DIR}${RESET}"
+step "Installing to ${INSTALL_DIR}"
 mv "${TMP}/gitt" "${INSTALL_DIR}/gitt"
 chmod +x "${INSTALL_DIR}/gitt"
 ok "Installed"
@@ -78,13 +78,13 @@ ok "Installed"
 printf "\n"
 case ":$PATH:" in
     *":${INSTALL_DIR}:"*)
-        printf "  ${GREEN}${BOLD}Ready!${RESET} Run ${CYAN}gitt${RESET} to start.\n"
+        printf "  %b%bReady!%b Run %bgitt%b to start.\n" "$GREEN" "$BOLD" "$RESET" "$CYAN" "$RESET"
         ;;
     *)
         warn "${INSTALL_DIR} is not in your PATH"
         info "Add this to your shell profile:"
         printf "\n"
-        printf "    ${BOLD}export PATH=\"${INSTALL_DIR}:\$PATH\"${RESET}\n"
+        printf "    %bexport PATH=\"%s:\$PATH\"%b\n" "$BOLD" "$INSTALL_DIR" "$RESET"
         printf "\n"
         ;;
 esac
