@@ -24,7 +24,7 @@ TARGET="${arch}-${os}"
 echo "Detected platform: ${TARGET}"
 
 # Get latest version
-LATEST=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+LATEST=$(curl -fsSL -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
 if [ -z "$LATEST" ]; then
     echo "Error: failed to get latest version"
     exit 1
