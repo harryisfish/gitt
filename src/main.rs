@@ -1,6 +1,7 @@
 mod app;
 mod git;
 mod ui;
+mod update;
 
 use anyhow::Result;
 use app::{App, AppEvent};

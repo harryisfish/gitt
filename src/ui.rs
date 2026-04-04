@@ -238,6 +238,13 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
+    if let Some(version) = &app.update_available {
+        spans.push(Span::styled(
+            format!("  ↑ v{version}"),
+            Style::default().fg(Color::Magenta),
+        ));
+    }
+
     let footer = ratatui::widgets::Paragraph::new(Line::from(spans))
         .style(Style::default().bg(Color::Rgb(30, 30, 30)));
     f.render_widget(footer, area);

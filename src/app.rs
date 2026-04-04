@@ -3,6 +3,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::layout::Rect;
 
 use crate::git::{self, GitState};
+use crate::update::UpdateChecker;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tab {
@@ -42,6 +43,8 @@ pub struct App {
     pub selected: usize,
     pub scroll_offset: usize,
     pub tab_areas: Vec<Rect>,
+    pub update_available: Option<String>,
+    update_checker: UpdateChecker,
 }
 
 impl App {
@@ -53,11 +56,18 @@ impl App {
             selected: 0,
             scroll_offset: 0,
             tab_areas: Vec::new(),
+            update_available: None,
+            update_checker: UpdateChecker::spawn(),
         })
     }
 
     pub fn refresh(&mut self) -> Result<()> {
         self.git = git::load_git_state()?;
+        if self.update_available.is_none() {
+            if let Some(version) = self.update_checker.try_recv() {
+                self.update_available = version;
+            }
+        }
         Ok(())
     }
 
