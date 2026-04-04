@@ -2,7 +2,6 @@
 set -e
 
 REPO="harryisfish/gitt"
-INSTALL_DIR="/usr/local/bin"
 
 # Detect OS
 OS=$(uname -s)
@@ -41,14 +40,23 @@ trap 'rm -rf "$TMP"' EXIT
 curl -fsSL "$URL" -o "${TMP}/gitt.tar.gz"
 tar xzf "${TMP}/gitt.tar.gz" -C "$TMP"
 
-# Install
-if [ -w "$INSTALL_DIR" ]; then
-    mv "${TMP}/gitt" "${INSTALL_DIR}/gitt"
+# Install: prefer user dir, fallback to /usr/local/bin
+if [ -w "/usr/local/bin" ]; then
+    INSTALL_DIR="/usr/local/bin"
 else
-    echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-    sudo mv "${TMP}/gitt" "${INSTALL_DIR}/gitt"
+    INSTALL_DIR="${HOME}/.local/bin"
+    mkdir -p "$INSTALL_DIR"
 fi
 
+mv "${TMP}/gitt" "${INSTALL_DIR}/gitt"
 chmod +x "${INSTALL_DIR}/gitt"
+
 echo "Installed gitt to ${INSTALL_DIR}/gitt"
+
+# Check if in PATH
+case ":$PATH:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *) echo "Note: add ${INSTALL_DIR} to your PATH:"; echo "  export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
+esac
+
 echo "Run 'gitt' to start!"
