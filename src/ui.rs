@@ -10,11 +10,11 @@ use crate::app::{App, Tab};
 use crate::git::{StagedStatus, UnstagedStatus};
 use crate::github::GhStatus;
 
-const ACCENT: Color = Color::Cyan;
+const ACCENT: Color = Color::Blue;
 const STAGED_COLOR: Color = Color::Green;
 const UNSTAGED_COLOR: Color = Color::Yellow;
 const UNTRACKED_COLOR: Color = Color::Red;
-const DIM: Color = Color::DarkGray;
+const DIM: Color = Color::Gray;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
@@ -57,7 +57,7 @@ fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
         app.tab_areas.push(Rect::new(x, area.y, width, 1));
 
         let style = if *tab == app.tab {
-            Style::default().fg(Color::Black).bg(ACCENT)
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD | Modifier::REVERSED)
         } else {
             Style::default().fg(DIM)
         };
@@ -118,7 +118,7 @@ fn draw_status(f: &mut Frame, app: &mut App, area: Rect) {
 
             let line = Line::from(vec![
                 Span::styled(format!(" {indicator} "), Style::default().fg(color)),
-                Span::styled(&file.path, Style::default().fg(Color::White)),
+                Span::styled(&file.path, Style::default()),
             ]);
 
             ListItem::new(line)
@@ -127,8 +127,7 @@ fn draw_status(f: &mut Frame, app: &mut App, area: Rect) {
 
     let list = List::new(items).highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD | Modifier::REVERSED),
     );
 
     let mut state = ListState::default().with_selected(Some(app.selected));
@@ -172,8 +171,7 @@ fn draw_branches(f: &mut Frame, app: &mut App, area: Rect) {
 
     let list = List::new(items).highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD | Modifier::REVERSED),
     );
 
     let mut state = ListState::default().with_selected(Some(app.selected));
@@ -192,7 +190,7 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
                     format!(" {short_hash} "),
                     Style::default().fg(ACCENT),
                 ),
-                Span::styled(&commit.message, Style::default().fg(Color::White)),
+                Span::styled(&commit.message, Style::default()),
             ];
             if let Some(tag) = &commit.tag {
                 spans.push(Span::styled(
@@ -211,8 +209,7 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
 
     let list = List::new(items).highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD | Modifier::REVERSED),
     );
 
     let mut state = ListState::default().with_selected(Some(app.selected));
@@ -267,7 +264,7 @@ fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
                     format!(" #{} ", pr.number),
                     Style::default().fg(ACCENT),
                 ),
-                Span::styled(&pr.title, Style::default().fg(Color::White)),
+                Span::styled(&pr.title, Style::default()),
                 review_icon,
                 Span::styled(
                     format!(" [{}]", pr.checks_status),
@@ -285,8 +282,7 @@ fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
 
     let list = List::new(items).highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD | Modifier::REVERSED),
     );
 
     let mut state = ListState::default().with_selected(Some(app.selected));
@@ -309,7 +305,7 @@ fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
                     Span::styled(format!(" {arrow} "), Style::default().fg(ACCENT)),
                     Span::styled(
                         &group.label,
-                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                        Style::default().add_modifier(Modifier::BOLD),
                     ),
                 ]);
                 ListItem::new(line)
@@ -320,7 +316,7 @@ fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
                 let toggle_color = if item.enabled { STAGED_COLOR } else { DIM };
                 let line = Line::from(vec![
                     Span::styled(format!("   {toggle} "), Style::default().fg(toggle_color)),
-                    Span::styled(&item.label, Style::default().fg(Color::White)),
+                    Span::styled(&item.label, Style::default()),
                 ]);
                 ListItem::new(line)
             }
@@ -329,8 +325,7 @@ fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
 
     let list = List::new(items).highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
-            .add_modifier(Modifier::BOLD),
+            .add_modifier(Modifier::BOLD | Modifier::REVERSED),
     );
 
     let mut state = ListState::default().with_selected(Some(cursor_idx));
@@ -352,12 +347,12 @@ fn draw_detail(f: &mut Frame, app: &mut App, area: Rect) {
     ]));
     lines.push(Line::from(vec![
         Span::styled(" author ", Style::default().fg(DIM)),
-        Span::styled(&detail.author, Style::default().fg(Color::White)),
+        Span::styled(&detail.author, Style::default()),
         Span::styled(format!(" <{}>", &detail.email), Style::default().fg(DIM)),
     ]));
     lines.push(Line::from(vec![
         Span::styled(" date   ", Style::default().fg(DIM)),
-        Span::styled(&detail.time, Style::default().fg(Color::White)),
+        Span::styled(&detail.time, Style::default()),
     ]));
     lines.push(Line::from(""));
 
@@ -365,7 +360,7 @@ fn draw_detail(f: &mut Frame, app: &mut App, area: Rect) {
     for msg_line in detail.message.lines() {
         lines.push(Line::from(Span::styled(
             format!("   {msg_line}"),
-            Style::default().fg(Color::White),
+            Style::default(),
         )));
     }
     lines.push(Line::from(""));
@@ -387,7 +382,7 @@ fn draw_detail(f: &mut Frame, app: &mut App, area: Rect) {
         };
         let mut spans = vec![
             Span::styled(format!(" {} ", file.status), Style::default().fg(status_color)),
-            Span::styled(&file.path, Style::default().fg(Color::White)),
+            Span::styled(&file.path, Style::default()),
         ];
         if file.additions > 0 || file.deletions > 0 {
             spans.push(Span::raw(" "));
@@ -431,7 +426,7 @@ fn draw_detail_footer(f: &mut Frame, area: Rect) {
         Span::styled(" scroll", Style::default().fg(DIM)),
     ];
     let footer = ratatui::widgets::Paragraph::new(Line::from(spans))
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)));
+        .style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(footer, area);
 }
 
@@ -477,6 +472,6 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     }
 
     let footer = ratatui::widgets::Paragraph::new(Line::from(spans))
-        .style(Style::default().bg(Color::Rgb(30, 30, 30)));
+        .style(Style::default().add_modifier(Modifier::DIM));
     f.render_widget(footer, area);
 }
