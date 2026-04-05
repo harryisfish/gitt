@@ -13,6 +13,10 @@ pub struct Config {
     pub mouse_enabled: bool,
     #[serde(default = "default_true")]
     pub auto_update_check: bool,
+    #[serde(default = "default_review_tool")]
+    pub review_tool: String,
+    #[serde(default = "default_false")]
+    pub auto_review: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +34,7 @@ pub struct TabsConfig {
 fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_refresh_interval() -> u64 { 2 }
+fn default_review_tool() -> String { "codex".to_string() }
 fn default_tabs() -> TabsConfig {
     TabsConfig {
         status: true,
@@ -46,6 +51,8 @@ impl Default for Config {
             refresh_interval: 2,
             mouse_enabled: true,
             auto_update_check: true,
+            review_tool: default_review_tool(),
+            auto_review: false,
         }
     }
 }

@@ -4,7 +4,8 @@ use ratatui::layout::Rect;
 
 use crate::config::Config;
 use crate::git::{self, CommitDetail, GitState};
-use crate::github::{GhStatus, PrLoader, PullRequest};
+use crate::github::{CurrentPr, GhStatus, PrLoader, PullRequest};
+use crate::review::{self, ReviewState};
 use crate::update::UpdateChecker;
 use std::sync::mpsc;
 
@@ -69,10 +70,16 @@ pub struct App {
     pub detail_scroll: usize,
     pub gh_status: GhStatus,
     pub prs: Vec<PullRequest>,
+    pub current_pr: Option<CurrentPr>,
+    pub pr_data_loaded: bool,
+    pub review_state: ReviewState,
+    pub review_scroll: usize,
+    review_rx: Option<mpsc::Receiver<ReviewState>>,
+    review_branch: String,
     pub settings_groups: Vec<SettingsGroup>,
     pub settings_cursor: SettingsCursor,
     pr_loader: PrLoader,
-    pr_pending: Option<mpsc::Receiver<(GhStatus, Vec<PullRequest>)>>,
+    pr_pending: Option<mpsc::Receiver<(GhStatus, Vec<PullRequest>, Option<CurrentPr>)>>,
     update_checker: UpdateChecker,
 }
 
@@ -89,6 +96,8 @@ impl App {
         let tab = visible_tabs.first().copied().unwrap_or(Tab::Status);
         let settings_groups = Self::build_settings_groups(&config);
 
+        let head_branch = git.head_branch.clone();
+
         Ok(Self {
             config,
             visible_tabs,
@@ -102,6 +111,12 @@ impl App {
             detail_scroll: 0,
             gh_status: GhStatus::NotInstalled,
             prs: Vec::new(),
+            current_pr: None,
+            pr_data_loaded: false,
+            review_state: ReviewState::Idle,
+            review_scroll: 0,
+            review_rx: None,
+            review_branch: head_branch,
             settings_groups,
             settings_cursor: SettingsCursor::Group(0),
             pr_loader: PrLoader::spawn(),
@@ -133,6 +148,18 @@ impl App {
                 ],
             },
             SettingsGroup {
+                label: "Review".into(),
+                expanded: false,
+                items: vec![
+                    SettingsToggle {
+                        key: "review.tool".into(),
+                        label: format!("Tool: {}", if config.review_tool == "codex" { "Codex" } else { "Claude" }),
+                        enabled: config.review_tool == "codex",
+                    },
+                    SettingsToggle { key: "review.auto".into(), label: "Auto review".into(), enabled: config.auto_review },
+                ],
+            },
+            SettingsGroup {
                 label: "General".into(),
                 expanded: false,
                 items: vec![
@@ -154,6 +181,12 @@ impl App {
             "tab.branch" => self.config.tabs.branch = new_val,
             "tab.log" => self.config.tabs.log = new_val,
             "tab.pr" => self.config.tabs.pr = new_val,
+            "review.tool" => {
+                self.config.review_tool = if new_val { "codex".into() } else { "claude".into() };
+                self.settings_groups[group_idx].items[item_idx].label =
+                    if new_val { "Tool: Codex".into() } else { "Tool: Claude".into() };
+            }
+            "review.auto" => self.config.auto_review = new_val,
             "mouse" => self.config.mouse_enabled = new_val,
             "auto_update" => self.config.auto_update_check = new_val,
             _ => {}
@@ -248,15 +281,42 @@ impl App {
     pub fn refresh(&mut self) -> Result<()> {
         self.git = git::load_git_state()?;
 
+        // Reset review state when branch changes
+        if self.git.head_branch != self.review_branch {
+            self.review_state = ReviewState::Idle;
+            self.review_scroll = 0;
+            self.review_rx = None;
+            self.review_branch = self.git.head_branch.clone();
+        }
+
+        // Check for review results
+        if let Some(rx) = &self.review_rx {
+            if let Ok(state) = rx.try_recv() {
+                self.review_state = state;
+                self.review_rx = None;
+            }
+        }
+
         if let Some(result) = self.pr_loader.try_recv() {
             self.gh_status = result.0;
             self.prs = result.1;
+            self.current_pr = result.2;
+            self.pr_data_loaded = true;
+
+            // Auto-review on first load if PR tab is active
+            if self.tab == Tab::PR
+                && self.config.auto_review
+                && matches!(self.review_state, ReviewState::Idle)
+            {
+                self.trigger_review();
+            }
         }
 
         if let Some(rx) = &self.pr_pending {
             if let Ok(result) = rx.try_recv() {
                 self.gh_status = result.0;
                 self.prs = result.1;
+                self.current_pr = result.2;
                 self.pr_pending = None;
             }
         }
@@ -275,12 +335,52 @@ impl App {
         Ok(())
     }
 
+    pub fn trigger_review(&mut self) {
+        if matches!(self.review_state, ReviewState::Running) {
+            return;
+        }
+
+        if self.git.head_branch.contains("detached") {
+            self.review_state = ReviewState::Error("HEAD is detached, checkout a branch first".into());
+            return;
+        }
+
+        let is_main = self.git.head_branch == "main" || self.git.head_branch == "master";
+        if is_main {
+            self.review_state = ReviewState::Error("On main branch, switch to a feature branch".into());
+            return;
+        }
+
+        let base = self.current_pr
+            .as_ref()
+            .map(|pr| pr.base_branch.clone())
+            .unwrap_or_else(|| self.detect_base_branch());
+
+        self.review_state = ReviewState::Running;
+        self.review_scroll = 0;
+        self.review_rx = Some(review::start_review(&self.config.review_tool, &base));
+    }
+
+    fn detect_base_branch(&self) -> String {
+        for branch in &self.git.branches {
+            if branch.name == "main" {
+                return "main".to_string();
+            }
+        }
+        for branch in &self.git.branches {
+            if branch.name == "master" {
+                return "master".to_string();
+            }
+        }
+        "main".to_string()
+    }
+
     pub fn list_len(&self) -> usize {
         match self.tab {
             Tab::Status => self.git.files.len(),
             Tab::Branch => self.git.branches.len(),
             Tab::Log => self.git.log.len(),
-            Tab::PR => self.prs.len(),
+            Tab::PR => 0,
             Tab::Settings => self.settings_flat_rows().len(),
         }
     }
@@ -288,6 +388,8 @@ impl App {
     fn move_up(&mut self) {
         if self.tab == Tab::Settings {
             self.settings_move_up();
+        } else if self.tab == Tab::PR {
+            self.review_scroll = self.review_scroll.saturating_sub(1);
         } else if self.selected > 0 {
             self.selected -= 1;
         }
@@ -296,6 +398,8 @@ impl App {
     fn move_down(&mut self) {
         if self.tab == Tab::Settings {
             self.settings_move_down();
+        } else if self.tab == Tab::PR {
+            self.review_scroll += 1;
         } else {
             let len = self.list_len();
             if len > 0 && self.selected < len - 1 {
@@ -309,6 +413,14 @@ impl App {
             self.tab = tab;
             self.selected = 0;
             self.scroll_offset = 0;
+
+            // Auto-trigger review when switching to PR tab
+            if tab == Tab::PR
+                && self.config.auto_review
+                && matches!(self.review_state, ReviewState::Idle)
+            {
+                self.trigger_review();
+            }
         }
     }
 
@@ -389,7 +501,11 @@ impl App {
 
         match key.code {
             KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
-                self.open_detail();
+                if self.tab == Tab::PR {
+                    self.trigger_review();
+                } else {
+                    self.open_detail();
+                }
                 AppEvent::Continue
             }
             KeyCode::Char(c @ '1'..='9') => {
@@ -416,7 +532,11 @@ impl App {
                 AppEvent::Continue
             }
             KeyCode::Char('r') => {
-                let _ = self.refresh();
+                if self.tab == Tab::PR {
+                    self.trigger_review();
+                } else {
+                    let _ = self.refresh();
+                }
                 AppEvent::Continue
             }
             _ => AppEvent::Continue,

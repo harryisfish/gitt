@@ -9,6 +9,7 @@ use ratatui::{
 use crate::app::{App, Tab};
 use crate::git::{StagedStatus, UnstagedStatus};
 use crate::github::GhStatus;
+use crate::review::ReviewState;
 
 const ACCENT: Color = Color::Blue;
 const STAGED_COLOR: Color = Color::Green;
@@ -217,76 +218,161 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
-    match &app.gh_status {
-        GhStatus::NotInstalled => {
-            let msg = ratatui::widgets::Paragraph::new(" gh CLI not installed\n Run: brew install gh")
-                .style(Style::default().fg(UNTRACKED_COLOR));
-            f.render_widget(msg, area);
-            return;
+    let mut lines: Vec<Line> = Vec::new();
+    let is_main = app.git.head_branch == "main" || app.git.head_branch == "master";
+    let is_detached = app.git.head_branch.contains("detached");
+    let can_review = !is_main && !is_detached;
+
+    // PR info section
+    if !app.pr_data_loaded {
+        lines.push(Line::from(Span::styled(
+            " Loading PR data...",
+            Style::default().fg(DIM),
+        )));
+    } else if is_detached {
+        lines.push(Line::from(Span::styled(
+            " HEAD is detached",
+            Style::default().fg(UNSTAGED_COLOR),
+        )));
+        lines.push(Line::from(Span::styled(
+            " Checkout a branch to use review",
+            Style::default().fg(DIM),
+        )));
+    } else if is_main {
+        lines.push(Line::from(Span::styled(
+            format!(" On {} branch", app.git.head_branch),
+            Style::default().fg(DIM),
+        )));
+        lines.push(Line::from(Span::styled(
+            " Switch to a feature branch to use review",
+            Style::default().fg(DIM),
+        )));
+    } else if let Some(pr) = &app.current_pr {
+        // PR header
+        lines.push(Line::from(vec![
+            Span::styled(format!(" #{} ", pr.number), Style::default().fg(ACCENT)),
+            Span::styled(&pr.title, Style::default().add_modifier(Modifier::BOLD)),
+        ]));
+
+        let mut info_spans = vec![
+            Span::styled(format!(" {} ← {}", pr.base_branch, pr.head_branch), Style::default().fg(DIM)),
+        ];
+
+        let review_icon = match pr.review_decision.as_str() {
+            "APPROVED" => Some(Span::styled("  ✓", Style::default().fg(STAGED_COLOR))),
+            "CHANGES_REQUESTED" => Some(Span::styled("  ✗", Style::default().fg(UNTRACKED_COLOR))),
+            "REVIEW_REQUIRED" => Some(Span::styled("  ○", Style::default().fg(UNSTAGED_COLOR))),
+            _ => None,
+        };
+        if let Some(icon) = review_icon {
+            info_spans.push(icon);
         }
-        GhStatus::NotAuthenticated => {
-            let msg = ratatui::widgets::Paragraph::new(" gh not authenticated\n Run: gh auth login")
-                .style(Style::default().fg(UNSTAGED_COLOR));
-            f.render_widget(msg, area);
-            return;
-        }
-        GhStatus::Ready => {}
+
+        let checks_color = if pr.checks_status.contains("failed") {
+            UNTRACKED_COLOR
+        } else if pr.checks_status.contains("pending") {
+            UNSTAGED_COLOR
+        } else {
+            STAGED_COLOR
+        };
+        info_spans.push(Span::styled(
+            format!("  [{}]", pr.checks_status),
+            Style::default().fg(checks_color),
+        ));
+        info_spans.push(Span::styled(
+            format!("  +{}-{}", pr.additions, pr.deletions),
+            Style::default().fg(DIM),
+        ));
+
+        lines.push(Line::from(info_spans));
+    } else {
+        // No PR — show branch info and gh status hint
+        lines.push(Line::from(Span::styled(
+            format!(" Branch: {}", app.git.head_branch),
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        )));
+
+        let hint = match &app.gh_status {
+            GhStatus::NotInstalled => " gh CLI not installed — install gh for PR info",
+            GhStatus::NotAuthenticated => " gh not authenticated — run: gh auth login",
+            GhStatus::Ready => " No PR found for this branch",
+        };
+        lines.push(Line::from(Span::styled(hint, Style::default().fg(DIM))));
     }
 
-    if app.prs.is_empty() {
-        let msg = ratatui::widgets::Paragraph::new(" No open pull requests")
-            .style(Style::default().fg(DIM));
-        f.render_widget(msg, area);
-        return;
-    }
+    if can_review {
+        // Separator
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            " ".to_string() + &"─".repeat(area.width.saturating_sub(2) as usize),
+            Style::default().fg(DIM),
+        )));
+        lines.push(Line::from(""));
 
-    let items: Vec<ListItem> = app
-        .prs
-        .iter()
-        .map(|pr| {
-            let checks_color = if pr.checks_status.contains("failed") {
-                UNTRACKED_COLOR
-            } else if pr.checks_status.contains("pending") {
-                UNSTAGED_COLOR
-            } else {
-                STAGED_COLOR
-            };
+        // Review section
+        let tool_label = if app.config.review_tool == "codex" { "Codex" } else { "Claude" };
 
-            let review_icon = match pr.review_decision.as_str() {
-                "APPROVED" => Span::styled(" ✓", Style::default().fg(STAGED_COLOR)),
-                "CHANGES_REQUESTED" => Span::styled(" ✗", Style::default().fg(UNTRACKED_COLOR)),
-                "REVIEW_REQUIRED" => Span::styled(" ○", Style::default().fg(UNSTAGED_COLOR)),
-                _ => Span::raw(""),
-            };
-
-            let line = Line::from(vec![
-                Span::styled(
-                    format!(" #{} ", pr.number),
-                    Style::default().fg(ACCENT),
-                ),
-                Span::styled(&pr.title, Style::default()),
-                review_icon,
-                Span::styled(
-                    format!(" [{}]", pr.checks_status),
-                    Style::default().fg(checks_color),
-                ),
-                Span::styled(
-                    format!(" +{}-{}", pr.additions, pr.deletions),
+        match &app.review_state {
+            ReviewState::Idle => {
+                lines.push(Line::from(Span::styled(
+                    format!(" Press Enter or r to review with {tool_label}"),
                     Style::default().fg(DIM),
-                ),
-            ]);
+                )));
+            }
+            ReviewState::Running => {
+                lines.push(Line::from(Span::styled(
+                    format!(" ⏳ Reviewing with {tool_label}..."),
+                    Style::default().fg(ACCENT),
+                )));
+            }
+            ReviewState::Done(text) => {
+                lines.push(Line::from(Span::styled(
+                    format!(" Review ({tool_label})"),
+                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                )));
+                lines.push(Line::from(""));
+                if text.trim().is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        " No issues found.",
+                        Style::default().fg(STAGED_COLOR),
+                    )));
+                } else {
+                    for line in text.lines() {
+                        lines.push(Line::from(Span::styled(
+                            format!(" {line}"),
+                            Style::default(),
+                        )));
+                    }
+                }
+            }
+            ReviewState::Error(err) => {
+                lines.push(Line::from(Span::styled(
+                    format!(" ✗ {err}"),
+                    Style::default().fg(UNTRACKED_COLOR),
+                )));
+                lines.push(Line::from(""));
+                lines.push(Line::from(Span::styled(
+                    " Press Enter to retry",
+                    Style::default().fg(DIM),
+                )));
+            }
+        }
+    }
 
-            ListItem::new(line)
-        })
+    // Render with scroll
+    let visible_height = area.height as usize;
+    let max_scroll = lines.len().saturating_sub(visible_height);
+    app.review_scroll = app.review_scroll.min(max_scroll);
+
+    let visible_lines: Vec<Line> = lines
+        .into_iter()
+        .skip(app.review_scroll)
+        .take(visible_height)
         .collect();
 
-    let list = List::new(items).highlight_style(
-        Style::default()
-            .add_modifier(Modifier::BOLD | Modifier::REVERSED),
-    );
-
-    let mut state = ListState::default().with_selected(Some(app.selected));
-    f.render_stateful_widget(list, area, &mut state);
+    let paragraph = ratatui::widgets::Paragraph::new(visible_lines)
+        .wrap(Wrap { trim: false });
+    f.render_widget(paragraph, area);
 }
 
 fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
@@ -461,6 +547,28 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
                 format!("?{untracked}"),
                 Style::default().fg(UNTRACKED_COLOR),
             ));
+        }
+    }
+
+    if app.tab == Tab::PR {
+        let is_main = app.git.head_branch == "main" || app.git.head_branch == "master";
+        let is_detached = app.git.head_branch.contains("detached");
+        if !is_main && !is_detached {
+            match &app.review_state {
+                ReviewState::Idle | ReviewState::Error(_) => {
+                    spans.push(Span::styled("  Enter", Style::default().fg(ACCENT)));
+                    spans.push(Span::styled(" review", Style::default().fg(DIM)));
+                }
+                ReviewState::Running => {
+                    spans.push(Span::styled("  reviewing...", Style::default().fg(DIM)));
+                }
+                ReviewState::Done(_) => {
+                    spans.push(Span::styled("  r", Style::default().fg(ACCENT)));
+                    spans.push(Span::styled(" re-review", Style::default().fg(DIM)));
+                    spans.push(Span::styled("  j/k", Style::default().fg(ACCENT)));
+                    spans.push(Span::styled(" scroll", Style::default().fg(DIM)));
+                }
+            }
         }
     }
 

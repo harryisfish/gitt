@@ -81,8 +81,55 @@ pub fn load_prs() -> Vec<PullRequest> {
         .collect()
 }
 
+#[derive(Debug, Clone)]
+pub struct CurrentPr {
+    pub number: u64,
+    pub title: String,
+    pub base_branch: String,
+    pub head_branch: String,
+    pub additions: u64,
+    pub deletions: u64,
+    pub review_decision: String,
+    pub checks_status: String,
+}
+
+pub fn load_current_pr() -> Option<CurrentPr> {
+    let output = Command::new("gh")
+        .args([
+            "pr", "view",
+            "--json", "number,title,additions,deletions,reviewDecision,statusCheckRollup,headRefName,baseRefName",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+
+    let checks = json.get("statusCheckRollup")
+        .and_then(|v| v.as_array())
+        .map(|c| summarize_checks(c))
+        .unwrap_or_else(|| "—".to_string());
+
+    Some(CurrentPr {
+        number: json.get("number")?.as_u64()?,
+        title: json.get("title")?.as_str()?.to_string(),
+        base_branch: json.get("baseRefName")?.as_str()?.to_string(),
+        head_branch: json.get("headRefName")?.as_str()?.to_string(),
+        additions: json.get("additions")?.as_u64().unwrap_or(0),
+        deletions: json.get("deletions")?.as_u64().unwrap_or(0),
+        review_decision: json.get("reviewDecision")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        checks_status: checks,
+    })
+}
+
 pub struct PrLoader {
-    rx: mpsc::Receiver<(GhStatus, Vec<PullRequest>)>,
+    rx: mpsc::Receiver<(GhStatus, Vec<PullRequest>, Option<CurrentPr>)>,
     last_refresh: Instant,
 }
 
@@ -93,11 +140,11 @@ impl PrLoader {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             let status = check_gh();
-            let prs = match &status {
-                GhStatus::Ready => load_prs(),
-                _ => Vec::new(),
+            let (prs, current_pr) = match &status {
+                GhStatus::Ready => (load_prs(), load_current_pr()),
+                _ => (Vec::new(), None),
             };
-            let _ = tx.send((status, prs));
+            let _ = tx.send((status, prs, current_pr));
         });
         Self {
             rx,
@@ -105,11 +152,11 @@ impl PrLoader {
         }
     }
 
-    pub fn try_recv(&self) -> Option<(GhStatus, Vec<PullRequest>)> {
+    pub fn try_recv(&self) -> Option<(GhStatus, Vec<PullRequest>, Option<CurrentPr>)> {
         self.rx.try_recv().ok()
     }
 
-    pub fn refresh(&mut self) -> Option<mpsc::Receiver<(GhStatus, Vec<PullRequest>)>> {
+    pub fn refresh(&mut self) -> Option<mpsc::Receiver<(GhStatus, Vec<PullRequest>, Option<CurrentPr>)>> {
         if self.last_refresh.elapsed().as_secs() < PR_REFRESH_INTERVAL_SECS {
             return None;
         }
@@ -117,11 +164,11 @@ impl PrLoader {
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             let status = check_gh();
-            let prs = match &status {
-                GhStatus::Ready => load_prs(),
-                _ => Vec::new(),
+            let (prs, current_pr) = match &status {
+                GhStatus::Ready => (load_prs(), load_current_pr()),
+                _ => (Vec::new(), None),
             };
-            let _ = tx.send((status, prs));
+            let _ = tx.send((status, prs, current_pr));
         });
         Some(rx)
     }
