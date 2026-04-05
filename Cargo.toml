@@ -1,6 +1,6 @@
 [package]
 name = "gitt-monitor"
-version = "2.4.1"
+version = "2.4.2"
 edition = "2024"
 description = "A lightweight TUI git status monitor for terminal split panes"
 license = "MIT"
