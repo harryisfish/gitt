@@ -511,6 +511,17 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
                     spans.push(Span::styled("  reviewing...", Style::default().fg(DIM)));
                 }
                 ReviewState::Done(_) => {
+                    // Show copy feedback or normal hints
+                    let show_copied = app.copy_feedback
+                        .map(|t| t.elapsed().as_secs() < 2)
+                        .unwrap_or(false);
+
+                    if show_copied {
+                        spans.push(Span::styled("  ✓ Copied", Style::default().fg(STAGED_COLOR)));
+                    } else {
+                        spans.push(Span::styled("  y", Style::default().fg(ACCENT)));
+                        spans.push(Span::styled(" copy", Style::default().fg(DIM)));
+                    }
                     spans.push(Span::styled("  r", Style::default().fg(ACCENT)));
                     spans.push(Span::styled(" re-review", Style::default().fg(DIM)));
                     spans.push(Span::styled("  j/k", Style::default().fg(ACCENT)));

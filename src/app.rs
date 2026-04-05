@@ -6,7 +6,10 @@ use crate::config::Config;
 use crate::git::{self, CommitDetail, GitState};
 use crate::review::{self, ReviewState};
 use crate::update::UpdateChecker;
+use std::io::Write;
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tab {
@@ -71,6 +74,7 @@ pub struct App {
     pub review_scroll: usize,
     review_rx: Option<mpsc::Receiver<ReviewState>>,
     review_branch: String,
+    pub copy_feedback: Option<Instant>,
     pub settings_groups: Vec<SettingsGroup>,
     pub settings_cursor: SettingsCursor,
     update_checker: UpdateChecker,
@@ -106,6 +110,7 @@ impl App {
             review_scroll: 0,
             review_rx: None,
             review_branch: head_branch,
+            copy_feedback: None,
             settings_groups,
             settings_cursor: SettingsCursor::Group(0),
             update_checker,
@@ -315,6 +320,31 @@ impl App {
         self.review_rx = Some(review::start_review(&self.config.review_tool, &base));
     }
 
+    fn copy_to_clipboard(text: &str) -> bool {
+        let (cmd, args): (&str, Vec<&str>) = if cfg!(target_os = "macos") {
+            ("pbcopy", vec![])
+        } else {
+            ("xclip", vec!["-selection", "clipboard"])
+        };
+
+        let mut child = match Command::new(cmd)
+            .args(&args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = stdin.write_all(text.as_bytes());
+        }
+
+        child.wait().map(|s| s.success()).unwrap_or(false)
+    }
+
     fn detect_base_branch(&self) -> String {
         for branch in &self.git.branches {
             if branch.name == "main" {
@@ -483,6 +513,16 @@ impl App {
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.move_down();
+                AppEvent::Continue
+            }
+            KeyCode::Char('y') => {
+                if self.tab == Tab::Review {
+                    if let ReviewState::Done(text) = &self.review_state {
+                        if Self::copy_to_clipboard(text) {
+                            self.copy_feedback = Some(Instant::now());
+                        }
+                    }
+                }
                 AppEvent::Continue
             }
             KeyCode::Char('r') => {
