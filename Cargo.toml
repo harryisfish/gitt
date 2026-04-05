@@ -1,6 +1,6 @@
 [package]
 name = "gitt-monitor"
-version = "2.3.3"
+version = "2.3.4"
 edition = "2024"
 description = "A lightweight TUI git status monitor for terminal split panes"
 license = "MIT"
@@ -8,6 +8,10 @@ repository = "https://github.com/harryisfish/gitt"
 homepage = "https://github.com/harryisfish/gitt"
 keywords = ["git", "tui", "terminal", "monitor", "status"]
 categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "gitt"
+path = "src/main.rs"
 
 [dependencies]
 ratatui = "0.29"
