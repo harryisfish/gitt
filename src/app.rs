@@ -354,7 +354,7 @@ impl App {
         // Detail view mode
         if self.detail.is_some() {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Left | KeyCode::Char('h') => self.close_detail(),
+                KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => self.close_detail(),
                 KeyCode::Up | KeyCode::Char('k') => {
                     self.detail_scroll = self.detail_scroll.saturating_sub(1);
                 }
@@ -369,7 +369,6 @@ impl App {
         // Settings tab
         if self.tab == Tab::Settings {
             match key.code {
-                KeyCode::Char('q') => return AppEvent::Quit,
                 KeyCode::Enter | KeyCode::Char(' ') => self.settings_enter(),
                 KeyCode::Up | KeyCode::Char('k') => self.move_up(),
                 KeyCode::Down | KeyCode::Char('j') => self.move_down(),
@@ -389,7 +388,6 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') => AppEvent::Quit,
             KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
                 self.open_detail();
                 AppEvent::Continue
