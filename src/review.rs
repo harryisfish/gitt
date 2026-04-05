@@ -34,7 +34,7 @@ const REVIEW_PROMPT: &str = "Review this code diff. Identify potential bugs, cod
 fn run_codex(base: &str) -> ReviewState {
     // codex review --base <branch> runs a non-interactive code review
     let result = Command::new("codex")
-        .args(["review", "--base", base, REVIEW_PROMPT])
+        .args(["review", "--base", base])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output();
