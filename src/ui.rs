@@ -8,7 +8,6 @@ use ratatui::{
 
 use crate::app::{App, Tab};
 use crate::git::{StagedStatus, UnstagedStatus};
-use crate::github::GhStatus;
 use crate::review::ReviewState;
 
 const ACCENT: Color = Color::Blue;
@@ -39,7 +38,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Tab::Status => draw_status(f, app, layout[2]),
             Tab::Branch => draw_branches(f, app, layout[2]),
             Tab::Log => draw_log(f, app, layout[2]),
-            Tab::PR => draw_prs(f, app, layout[2]),
+            Tab::Review => draw_review(f, app, layout[2]),
             Tab::Settings => draw_settings(f, app, layout[2]),
         }
         draw_footer(f, app, layout[3]);
@@ -217,19 +216,14 @@ fn draw_log(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
+fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     let is_main = app.git.head_branch == "main" || app.git.head_branch == "master";
     let is_detached = app.git.head_branch.contains("detached");
     let can_review = !is_main && !is_detached;
 
-    // PR info section
-    if !app.pr_data_loaded {
-        lines.push(Line::from(Span::styled(
-            " Loading PR data...",
-            Style::default().fg(DIM),
-        )));
-    } else if is_detached {
+    // Branch info
+    if is_detached {
         lines.push(Line::from(Span::styled(
             " HEAD is detached",
             Style::default().fg(UNSTAGED_COLOR),
@@ -247,57 +241,11 @@ fn draw_prs(f: &mut Frame, app: &mut App, area: Rect) {
             " Switch to a feature branch to use review",
             Style::default().fg(DIM),
         )));
-    } else if let Some(pr) = &app.current_pr {
-        // PR header
-        lines.push(Line::from(vec![
-            Span::styled(format!(" #{} ", pr.number), Style::default().fg(ACCENT)),
-            Span::styled(&pr.title, Style::default().add_modifier(Modifier::BOLD)),
-        ]));
-
-        let mut info_spans = vec![
-            Span::styled(format!(" {} ← {}", pr.base_branch, pr.head_branch), Style::default().fg(DIM)),
-        ];
-
-        let review_icon = match pr.review_decision.as_str() {
-            "APPROVED" => Some(Span::styled("  ✓", Style::default().fg(STAGED_COLOR))),
-            "CHANGES_REQUESTED" => Some(Span::styled("  ✗", Style::default().fg(UNTRACKED_COLOR))),
-            "REVIEW_REQUIRED" => Some(Span::styled("  ○", Style::default().fg(UNSTAGED_COLOR))),
-            _ => None,
-        };
-        if let Some(icon) = review_icon {
-            info_spans.push(icon);
-        }
-
-        let checks_color = if pr.checks_status.contains("failed") {
-            UNTRACKED_COLOR
-        } else if pr.checks_status.contains("pending") {
-            UNSTAGED_COLOR
-        } else {
-            STAGED_COLOR
-        };
-        info_spans.push(Span::styled(
-            format!("  [{}]", pr.checks_status),
-            Style::default().fg(checks_color),
-        ));
-        info_spans.push(Span::styled(
-            format!("  +{}-{}", pr.additions, pr.deletions),
-            Style::default().fg(DIM),
-        ));
-
-        lines.push(Line::from(info_spans));
     } else {
-        // No PR — show branch info and gh status hint
         lines.push(Line::from(Span::styled(
             format!(" Branch: {}", app.git.head_branch),
             Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
         )));
-
-        let hint = match &app.gh_status {
-            GhStatus::NotInstalled => " gh CLI not installed — install gh for PR info",
-            GhStatus::NotAuthenticated => " gh not authenticated — run: gh auth login",
-            GhStatus::Ready => " No PR found for this branch",
-        };
-        lines.push(Line::from(Span::styled(hint, Style::default().fg(DIM))));
     }
 
     if can_review {
@@ -550,7 +498,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    if app.tab == Tab::PR {
+    if app.tab == Tab::Review {
         let is_main = app.git.head_branch == "main" || app.git.head_branch == "master";
         let is_detached = app.git.head_branch.contains("detached");
         if !is_main && !is_detached {

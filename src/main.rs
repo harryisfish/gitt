@@ -1,7 +1,6 @@
 mod app;
 mod config;
 mod git;
-mod github;
 mod review;
 mod self_update;
 mod ui;

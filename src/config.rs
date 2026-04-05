@@ -28,7 +28,7 @@ pub struct TabsConfig {
     #[serde(default = "default_true")]
     pub log: bool,
     #[serde(default = "default_false")]
-    pub pr: bool,
+    pub review: bool,
 }
 
 fn default_true() -> bool { true }
@@ -40,7 +40,7 @@ fn default_tabs() -> TabsConfig {
         status: true,
         branch: true,
         log: true,
-        pr: false,
+        review: false,
     }
 }
 
