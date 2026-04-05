@@ -4,7 +4,7 @@ use ratatui::layout::Rect;
 
 use crate::config::Config;
 use crate::git::{self, CommitDetail, GitState};
-use crate::review::{self, ReviewState};
+use crate::review::{self, ReviewMode, ReviewState};
 use crate::update::UpdateChecker;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -71,9 +71,11 @@ pub struct App {
     pub detail: Option<CommitDetail>,
     pub detail_scroll: usize,
     pub review_state: ReviewState,
+    pub review_mode: Option<ReviewMode>,
     pub review_scroll: usize,
     review_rx: Option<mpsc::Receiver<ReviewState>>,
     review_branch: String,
+    last_commit_hash: String,
     pub copy_feedback: Option<Instant>,
     pub settings_groups: Vec<SettingsGroup>,
     pub settings_cursor: SettingsCursor,
@@ -94,6 +96,7 @@ impl App {
         let settings_groups = Self::build_settings_groups(&config);
 
         let head_branch = git.head_branch.clone();
+        let last_commit_hash = git.log.first().map(|c| c.hash.clone()).unwrap_or_default();
 
         Ok(Self {
             config,
@@ -107,9 +110,11 @@ impl App {
             detail: None,
             detail_scroll: 0,
             review_state: ReviewState::Idle,
+            review_mode: None,
             review_scroll: 0,
             review_rx: None,
             review_branch: head_branch,
+            last_commit_hash,
             copy_feedback: None,
             settings_groups,
             settings_cursor: SettingsCursor::Group(0),
@@ -276,9 +281,20 @@ impl App {
         // Reset review state when branch changes
         if self.git.head_branch != self.review_branch {
             self.review_state = ReviewState::Idle;
+            self.review_mode = None;
             self.review_scroll = 0;
             self.review_rx = None;
             self.review_branch = self.git.head_branch.clone();
+            self.last_commit_hash = self.git.log.first().map(|c| c.hash.clone()).unwrap_or_default();
+        }
+
+        // Auto re-review when new commits are detected
+        let current_hash = self.git.log.first().map(|c| c.hash.as_str()).unwrap_or("");
+        if !current_hash.is_empty() && current_hash != self.last_commit_hash {
+            self.last_commit_hash = current_hash.to_string();
+            if self.tab == Tab::Review && !matches!(self.review_state, ReviewState::Running) {
+                self.trigger_branch_review();
+            }
         }
 
         // Check for review results
@@ -297,27 +313,43 @@ impl App {
         Ok(())
     }
 
-    pub fn trigger_review(&mut self) {
+    fn can_review(&mut self) -> bool {
         if matches!(self.review_state, ReviewState::Running) {
-            return;
+            return false;
         }
-
         if self.git.head_branch.contains("detached") {
             self.review_state = ReviewState::Error("HEAD is detached, checkout a branch first".into());
-            return;
+            return false;
         }
-
         let is_main = self.git.head_branch == "main" || self.git.head_branch == "master";
         if is_main {
             self.review_state = ReviewState::Error("On main branch, switch to a feature branch".into());
-            return;
+            return false;
         }
+        true
+    }
+
+    /// Auto-triggered on new commits: review branch diff against base
+    pub fn trigger_branch_review(&mut self) {
+        if !self.can_review() { return; }
 
         let base = self.detect_base_branch();
-
+        let mode = ReviewMode::Branch(base);
+        self.review_mode = Some(mode.clone());
         self.review_state = ReviewState::Running;
         self.review_scroll = 0;
-        self.review_rx = Some(review::start_review(&self.config.review_tool, &base));
+        self.review_rx = Some(review::start_review(&self.config.review_tool, mode));
+    }
+
+    /// Manual trigger (Enter/r): review uncommitted working changes
+    pub fn trigger_manual_review(&mut self) {
+        if !self.can_review() { return; }
+
+        let mode = ReviewMode::Uncommitted;
+        self.review_mode = Some(mode.clone());
+        self.review_state = ReviewState::Running;
+        self.review_scroll = 0;
+        self.review_rx = Some(review::start_review(&self.config.review_tool, mode));
     }
 
     fn copy_to_clipboard(text: &str) -> bool {
@@ -398,12 +430,12 @@ impl App {
             self.selected = 0;
             self.scroll_offset = 0;
 
-            // Auto-trigger review when switching to PR tab
+            // Auto-trigger branch review when switching to Review tab
             if tab == Tab::Review
                 && self.config.auto_review
                 && matches!(self.review_state, ReviewState::Idle)
             {
-                self.trigger_review();
+                self.trigger_branch_review();
             }
         }
     }
@@ -486,7 +518,7 @@ impl App {
         match key.code {
             KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
                 if self.tab == Tab::Review {
-                    self.trigger_review();
+                    self.trigger_manual_review();
                 } else {
                     self.open_detail();
                 }
@@ -527,7 +559,7 @@ impl App {
             }
             KeyCode::Char('r') => {
                 if self.tab == Tab::Review {
-                    self.trigger_review();
+                    self.trigger_manual_review();
                 } else {
                     let _ = self.refresh();
                 }

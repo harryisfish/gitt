@@ -268,14 +268,16 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
                 )));
             }
             ReviewState::Running => {
+                let mode_label = app.review_mode.as_ref().map(|m| m.label()).unwrap_or("...");
                 lines.push(Line::from(Span::styled(
-                    format!(" ⏳ Reviewing with {tool_label}..."),
+                    format!(" ⏳ Reviewing {mode_label} with {tool_label}..."),
                     Style::default().fg(ACCENT),
                 )));
             }
             ReviewState::Done(text) => {
+                let mode_label = app.review_mode.as_ref().map(|m| m.label()).unwrap_or("");
                 lines.push(Line::from(Span::styled(
-                    format!(" Review ({tool_label})"),
+                    format!(" Review ({tool_label} · {mode_label})"),
                     Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
                 )));
                 lines.push(Line::from(""));
@@ -505,7 +507,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
             match &app.review_state {
                 ReviewState::Idle | ReviewState::Error(_) => {
                     spans.push(Span::styled("  Enter", Style::default().fg(ACCENT)));
-                    spans.push(Span::styled(" review", Style::default().fg(DIM)));
+                    spans.push(Span::styled(" review changes", Style::default().fg(DIM)));
                 }
                 ReviewState::Running => {
                     spans.push(Span::styled("  reviewing...", Style::default().fg(DIM)));

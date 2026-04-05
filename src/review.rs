@@ -11,16 +11,31 @@ pub enum ReviewState {
     Error(String),
 }
 
-pub fn start_review(tool: &str, base_branch: &str) -> mpsc::Receiver<ReviewState> {
+#[derive(Debug, Clone)]
+pub enum ReviewMode {
+    Branch(String),  // base branch name
+    Uncommitted,
+}
+
+impl ReviewMode {
+    pub fn label(&self) -> &str {
+        match self {
+            ReviewMode::Branch(_) => "branch diff",
+            ReviewMode::Uncommitted => "working changes",
+        }
+    }
+}
+
+pub fn start_review(tool: &str, mode: ReviewMode) -> mpsc::Receiver<ReviewState> {
     let (tx, rx) = mpsc::channel();
     let tool = tool.to_string();
-    let base = base_branch.to_string();
 
     thread::spawn(move || {
-        let result = if tool == "claude" {
-            run_claude(&base)
-        } else {
-            run_codex(&base)
+        let result = match (&*tool, &mode) {
+            ("claude", ReviewMode::Branch(base)) => run_claude_branch(base),
+            ("claude", ReviewMode::Uncommitted) => run_claude_uncommitted(),
+            (_, ReviewMode::Branch(base)) => run_codex_branch(base),
+            (_, ReviewMode::Uncommitted) => run_codex_uncommitted(),
         };
 
         let _ = tx.send(result);
@@ -31,10 +46,19 @@ pub fn start_review(tool: &str, base_branch: &str) -> mpsc::Receiver<ReviewState
 
 const REVIEW_PROMPT: &str = "Review this code diff. Identify potential bugs, code quality issues, and suggest improvements. Be concise and actionable.";
 
-fn run_codex(base: &str) -> ReviewState {
-    // codex review --base <branch> runs a non-interactive code review
+// --- Codex ---
+
+fn run_codex_branch(base: &str) -> ReviewState {
+    run_codex_cmd(&["review", "--base", base])
+}
+
+fn run_codex_uncommitted() -> ReviewState {
+    run_codex_cmd(&["review", "--uncommitted"])
+}
+
+fn run_codex_cmd(args: &[&str]) -> ReviewState {
     let result = Command::new("codex")
-        .args(["review", "--base", base])
+        .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output();
@@ -58,13 +82,25 @@ fn run_codex(base: &str) -> ReviewState {
     }
 }
 
-fn run_claude(base: &str) -> ReviewState {
-    // Get diff first, then pipe to claude -p
-    let diff = match get_diff(base) {
+// --- Claude ---
+
+fn run_claude_branch(base: &str) -> ReviewState {
+    let diff = match get_diff_branch(base) {
         Ok(d) => d,
         Err(e) => return ReviewState::Error(e),
     };
+    run_claude_with_diff(&diff)
+}
 
+fn run_claude_uncommitted() -> ReviewState {
+    let diff = match get_diff_uncommitted() {
+        Ok(d) => d,
+        Err(e) => return ReviewState::Error(e),
+    };
+    run_claude_with_diff(&diff)
+}
+
+fn run_claude_with_diff(diff: &str) -> ReviewState {
     let mut child = match Command::new("claude")
         .args(["-p", REVIEW_PROMPT])
         .stdin(Stdio::piped())
@@ -99,7 +135,9 @@ fn run_claude(base: &str) -> ReviewState {
     }
 }
 
-fn get_diff(base: &str) -> Result<String, String> {
+// --- Diff helpers ---
+
+fn get_diff_branch(base: &str) -> Result<String, String> {
     let output = Command::new("git")
         .args(["diff", &format!("{base}...HEAD")])
         .output()
@@ -112,7 +150,6 @@ fn get_diff(base: &str) -> Result<String, String> {
         }
     }
 
-    // Fallback: two-dot diff
     let output = Command::new("git")
         .args(["diff", base, "HEAD"])
         .output()
@@ -125,6 +162,24 @@ fn get_diff(base: &str) -> Result<String, String> {
     let text = String::from_utf8_lossy(&output.stdout).to_string();
     if text.trim().is_empty() {
         return Err("No changes between current branch and base".into());
+    }
+    Ok(text)
+}
+
+fn get_diff_uncommitted() -> Result<String, String> {
+    // git diff HEAD shows both staged and unstaged changes
+    let output = Command::new("git")
+        .args(["diff", "HEAD"])
+        .output()
+        .map_err(|e| format!("Failed to run git diff: {e}"))?;
+
+    if !output.status.success() {
+        return Err("Failed to get working tree diff".into());
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout).to_string();
+    if text.trim().is_empty() {
+        return Err("No uncommitted changes".into());
     }
     Ok(text)
 }
