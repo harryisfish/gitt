@@ -13,10 +13,22 @@ A lightweight TUI git status monitor, designed for tmux split panes alongside CL
 └─────────────────────────────────┘
 ```
 
+## Why Gitt?
+
+When you switch from VS Code / Cursor to terminal-based editors like Claude Code or Codex, you lose the built-in Git panel — no more file status, branch info, or commit history at a glance.
+
+Gitt brings that back. It runs in a tmux split pane beside your editor, giving you a always-visible Git overview without leaving the terminal. Think of it as your **VS Code Git panel, but for the terminal workflow**.
+
 ## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/harryisfish/gitt/main/install.sh | sh
+```
+
+Or install from crates.io:
+
+```bash
+cargo install gitt-monitor
 ```
 
 Or build from source:
